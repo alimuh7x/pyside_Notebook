@@ -1,19 +1,6 @@
-## Install with: pip install -r requirements.txt
-dash
-dash-mantine-components
-plotly
 PySide6
 numpy
 scipy
 pandas
-sympy
-pyvista
-vtk
+plotly
 markdown
-kaleido
-plyer
-pyobjus; sys_platform == 'darwin'
-pywin32; sys_platform == 'win32'
-easygui
-anthropic
-openai
