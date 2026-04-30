@@ -1,0 +1,33 @@
+{
+  "version": 6,
+  "layout": {
+    "left_column_width_pct": 50
+  },
+  "cells": [
+    {
+      "id": "cell-thermal-md",
+      "type": "markdown",
+      "column": "left",
+      "panel_width": null,
+      "source": "# Thermal Cycle Statistics\n\nCategory: thermal\n\nInspect a compact thermal cycle with peak and mean temperatures."
+    },
+    {
+      "id": "cell-thermal-code",
+      "type": "code",
+      "column": "left",
+      "panel_width": null,
+      "source": "import numpy as np\n\ntemperature_c = np.array([25, 120, 240, 315, 280, 160, 60], dtype=float)\nprint('peak_C =', float(np.max(temperature_c)))\nprint('mean_C =', round(float(np.mean(temperature_c)), 2))\n{'peak_C': float(np.max(temperature_c)), 'mean_C': float(np.mean(temperature_c))}\n"
+    }
+  ],
+  "metadata": {
+    "version": 6,
+    "title": "Thermal Cycle Statistics",
+    "category": "thermal",
+    "description": "Inspect a compact thermal cycle with peak and mean temperatures.",
+    "tags": [
+      "numpy",
+      "thermal",
+      "statistics"
+    ]
+  }
+}

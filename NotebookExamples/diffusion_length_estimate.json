@@ -1,0 +1,33 @@
+{
+  "version": 6,
+  "layout": {
+    "left_column_width_pct": 50
+  },
+  "cells": [
+    {
+      "id": "cell-diffusion-length-md",
+      "type": "markdown",
+      "column": "left",
+      "panel_width": null,
+      "source": "# Diffusion Length Estimate\n\nCategory: transport\n\nCompute a diffusion length from a coefficient and time history."
+    },
+    {
+      "id": "cell-diffusion-length-code",
+      "type": "code",
+      "column": "left",
+      "panel_width": null,
+      "source": "import numpy as np\n\ntime_s = np.array([1, 10, 60, 300, 900], dtype=float)\ndiffusivity = 2.5e-14\nlength_um = np.sqrt(2.0 * diffusivity * time_s) * 1e6\nprint('length_um =', np.round(length_um, 3))\nlength_um.tolist()\n"
+    }
+  ],
+  "metadata": {
+    "version": 6,
+    "title": "Diffusion Length Estimate",
+    "category": "transport",
+    "description": "Compute a diffusion length from a coefficient and time history.",
+    "tags": [
+      "numpy",
+      "diffusion",
+      "units"
+    ]
+  }
+}

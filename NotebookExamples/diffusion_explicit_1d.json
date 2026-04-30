@@ -1,0 +1,34 @@
+{
+  "version": 6,
+  "layout": {
+    "left_column_width_pct": 50
+  },
+  "cells": [
+    {
+      "id": "cell-diffusion-md",
+      "type": "markdown",
+      "column": "left",
+      "panel_width": null,
+      "source": "# 1D Diffusion Explicit Scheme\n\nCategory: transport\n\nRun an explicit finite-difference diffusion stepper and plot the final profile."
+    },
+    {
+      "id": "cell-diffusion-code",
+      "type": "code",
+      "column": "left",
+      "panel_width": null,
+      "source": "import numpy as np\nimport matplotlib.pyplot as plt\n\n# Parameters\nL = 1.0          # domain length\nNx = 50          # number of grid points\ndx = L / (Nx - 1)\n\nD = 0.1          # diffusion coefficient\ndt = 0.0005      # time step\nNt = 200         # number of time steps\n\n# Stability condition (important for explicit scheme)\nalpha = D * dt / dx**2\nprint('alpha =', alpha)  # should be <= 0.5\n\n# Grid\nx = np.linspace(0, L, Nx)\n\n# Initial condition (Gaussian peak)\nu = np.exp(-100 * (x - 0.5)**2)\n\n# Time stepping\nfor n in range(Nt):\n    u_new = u.copy()\n\n    for i in range(1, Nx - 1):\n        u_new[i] = u[i] + alpha * (u[i+1] - 2*u[i] + u[i-1])\n\n    # Boundary conditions (fixed)\n    u_new[0] = 0\n    u_new[-1] = 0\n\n    u = u_new\n\n# Plot result\nplt.plot(x, u, label='Final')\nplt.xlabel('x')\nplt.ylabel('u')\nplt.title('1D Diffusion')\nplt.legend()\nplt.show()\n"
+    }
+  ],
+  "metadata": {
+    "version": 6,
+    "title": "1D Diffusion Explicit Scheme",
+    "category": "transport",
+    "description": "Run an explicit finite-difference diffusion stepper and plot the final profile.",
+    "tags": [
+      "numpy",
+      "matplotlib",
+      "diffusion",
+      "finite-difference"
+    ]
+  }
+}

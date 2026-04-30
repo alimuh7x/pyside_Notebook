@@ -1,0 +1,25 @@
+{
+  "version": 6,
+  "layout": {
+    "left_column_width_pct": 45
+  },
+  "cells": [
+    {
+      "id": "cell-21226bee",
+      "type": "code",
+      "column": "left",
+      "panel_width": null,
+      "source": "import numpy as np\nimport matplotlib.pyplot as plt\n\n# -----------------------\n# Grid\n# -----------------------\nnx = 30\ndx = 1.0\ndt = 0.01\nsteps = 10000\n\n# -----------------------\n# Parameters\n# -----------------------\nG = 1.0\n\nl = 6.0\nepsilon = 3.0 / 16.0 * l\nK = 9.0 / 64.0\nL = 0.2\n\n\n# -----------------------\n# Field\n# -----------------------\nphi = np.zeros(nx)\nx = np.arange(nx)\nForce = np.zeros(nx)\n# Initial crack (finite width is better)\ncenter = nx // 2\nphi = np.maximum(1 - np.abs(x - center) / (2 * l), 0.0)**2\n\n\n# -----------------------\n# Laplacian (1D periodic)\n# -----------------------\ndef laplacian_1d(u):\n    return (np.roll(u, 1) - 2*u + np.roll(u, -1)) / dx**2\n\nphi_exact = np.maximum(1 - np.abs(x - center) / l, 0.0)**2\n# -----------------------\n# Time evolution\n# -----------------------\nfor step in range(steps):\n    phi_old = phi.copy()\n    lap = laplacian_1d(phi)\n\n    for i in range(nx):\n        driving_force = 2 *  epsilon * lap[i] - (K / epsilon) \n        Force[i] = driving_force\n\n\n        phi_new = phi[i]\n\n        # update only if not ~1\n        if phi[i] < 0.999999:\n            phi[i] = phi[i] + dt * L * driving_force\n\n        # irreversibility (no decrease)\n        if phi[i] < 0:\n            phi[i] = 0\n\n        if phi[i] > 1:\n            phi[i] = 1\n\n\n\n# -----------------------\n# Plot result\n# -----------------------\n\n"
+    }
+  ],
+  "metadata": {
+    "version": 6,
+    "title": "Fracture Obstacle",
+    "category": "custom",
+    "description": "Saved from the desktop notebook.",
+    "tags": [
+      "saved",
+      "desktop"
+    ]
+  }
+}

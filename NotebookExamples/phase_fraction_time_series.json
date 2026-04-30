@@ -1,0 +1,33 @@
+{
+  "version": 6,
+  "layout": {
+    "left_column_width_pct": 50
+  },
+  "cells": [
+    {
+      "id": "cell-phase-md",
+      "type": "markdown",
+      "column": "left",
+      "panel_width": null,
+      "source": "# Phase Fraction Time Series\n\nCategory: materials\n\nBuild a simple phase-fraction curve and summarize the final transformed fraction."
+    },
+    {
+      "id": "cell-phase-code",
+      "type": "code",
+      "column": "left",
+      "panel_width": null,
+      "source": "import numpy as np\n\ntime_s = np.linspace(0.0, 120.0, 9)\nfraction = 1.0 - np.exp(-time_s / 45.0)\nprint('time_s =', time_s)\nprint('fraction =', np.round(fraction, 4))\nfraction[-1]\n"
+    }
+  ],
+  "metadata": {
+    "version": 6,
+    "title": "Phase Fraction Time Series",
+    "category": "materials",
+    "description": "Build a simple phase-fraction curve and summarize the final transformed fraction.",
+    "tags": [
+      "numpy",
+      "kinetics",
+      "time-series"
+    ]
+  }
+}

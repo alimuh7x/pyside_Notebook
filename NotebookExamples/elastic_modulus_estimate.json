@@ -1,0 +1,33 @@
+{
+  "version": 6,
+  "layout": {
+    "left_column_width_pct": 50
+  },
+  "cells": [
+    {
+      "id": "cell-elastic-md",
+      "type": "markdown",
+      "column": "left",
+      "panel_width": null,
+      "source": "# Elastic Modulus Estimate\n\nCategory: mechanics\n\nEstimate Young's modulus from a small synthetic stress-strain dataset."
+    },
+    {
+      "id": "cell-elastic-code",
+      "type": "code",
+      "column": "left",
+      "panel_width": null,
+      "source": "import numpy as np\n\nstrain = np.array([0.0, 0.0005, 0.0010, 0.0015, 0.0020])\nstress_mpa = np.array([0.0, 102.0, 205.0, 307.0, 410.0])\nslope, intercept = np.polyfit(strain, stress_mpa, 1)\nprint('slope_MPa =', round(float(slope), 3))\nprint('intercept_MPa =', round(float(intercept), 3))\nslope\n"
+    }
+  ],
+  "metadata": {
+    "version": 6,
+    "title": "Elastic Modulus Estimate",
+    "category": "mechanics",
+    "description": "Estimate Young's modulus from a small synthetic stress-strain dataset.",
+    "tags": [
+      "numpy",
+      "mechanics",
+      "linear-fit"
+    ]
+  }
+}
