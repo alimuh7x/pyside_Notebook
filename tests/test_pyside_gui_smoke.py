@@ -79,6 +79,30 @@ def test_main_window_exposes_tabbed_notebook_and_graphs_shell():
     assert window.windowTitle() == "Calculation Notebook Desktop"
 
 
+def test_notebook_tab_uses_workspace_scroll_instead_of_inner_cell_scroll_area():
+    _app()
+
+    tab = NotebookTab()
+
+    assert hasattr(tab, "workspace_scroll")
+    assert tab.workspace_scroll.widget() is tab.workspace_content
+    assert not hasattr(tab, "left_scroll")
+
+
+def test_quick_preview_header_and_controls_do_not_expand_vertically():
+    _app()
+
+    tab = NotebookTab()
+    tab.resize(1400, 1000)
+    tab.show()
+    QApplication.processEvents()
+
+    quick = tab.quick_preview_panel
+
+    assert quick.status_label.height() <= 40
+    assert quick.series_controls.height() <= 120
+
+
 def test_main_window_title_bar_exposes_window_controls_and_labels():
     _app()
 
@@ -240,6 +264,27 @@ def test_notebook_tab_load_document_restores_saved_outputs():
 
     assert tab.cells[0].last_result is not None
     assert tab.cells[0].last_result.outputs[0].data["text"] == "1"
+
+
+def test_notebook_tab_load_document_restores_saved_plot_preview():
+    _app()
+    tab = NotebookTab()
+    tab.load_document(
+        tab.storage.default_document().__class__(
+            cells=[
+                {
+                    "id": "cell-1",
+                    "type": "code",
+                    "source": "import plotly.graph_objects as go\nfig = go.Figure()\nfig",
+                    "outputs": [{"kind": "plotly", "data": {"html": "<div>saved-plot</div>", "text": "Plotly Figure"}}],
+                }
+            ],
+            metadata={"version": 6},
+        )
+    )
+
+    assert "saved-plot" in tab.graph_state.latest_plot_html
+    assert "latest executed notebook plot" in tab.graph_workspace.cards()[0].status_label.text().lower()
 
 
 def test_notebook_tab_can_reorder_cells():
@@ -555,20 +600,22 @@ def test_plot_view_wrapper_hides_internal_scroll_and_loads_local_mathjax():
     assert "tex-svg.js" in wrapped_html
 
 
-def test_notebook_tab_uses_quick_preview_panel_for_latest_plot():
+def test_notebook_tab_uses_multi_graph_workspace_for_latest_plot():
     _app()
     tab = NotebookTab()
     result = tab.execution_engine.execute("import plotly.graph_objects as go\nfig = go.Figure()\nfig.add_scatter(y=[1,2,3])\nfig")
     tab.cells[0].set_result(result)
     tab._refresh_graphs_panel()
 
-    assert not tab.quick_preview_panel.isHidden()
-    assert tab.quick_preview_panel.mode_combo.currentData() == "series"
-    assert hasattr(tab.quick_preview_panel, "x_combo")
-    assert hasattr(tab.quick_preview_panel, "y_combo")
-    assert hasattr(tab.quick_preview_panel, "evolution_matrix_combo")
-    assert not tab.quick_preview_panel.plot_view.isHidden()
-    assert "quick preview" in tab.quick_preview_panel.status_label.text().lower() or "latest executed notebook plot" in tab.quick_preview_panel.status_label.text().lower()
+    assert not tab.graph_workspace.isHidden()
+    assert tab.graph_workspace.card_count() == 1
+    first_card = tab.graph_workspace.cards()[0]
+    assert first_card.mode_combo.currentData() == "series"
+    assert hasattr(first_card, "x_combo")
+    assert hasattr(first_card, "y_combo")
+    assert hasattr(first_card, "evolution_matrix_combo")
+    assert not first_card.plot_view.isHidden()
+    assert "latest executed notebook plot" in first_card.status_label.text().lower()
 
 
 def test_notebook_fonts_are_larger_than_old_defaults():
@@ -616,7 +663,7 @@ def test_graph_panel_uses_source_line_as_title():
     tab._refresh_graphs_panel()
 
     assert tab.graph_state.latest_plot_title == "plt.plot([0, 1], [0, 1])"
-    assert tab.quick_preview_panel.plot_title.text() in {"Quick preview", "Latest notebook plot", "plt.plot([0, 1], [0, 1])"}
+    assert tab.graph_workspace.cards()[0].status_label.text()
 
 
 def test_graph_panel_uses_plot_view_for_html_image_fallback():
@@ -633,26 +680,49 @@ def test_graph_panel_uses_plot_view_for_html_image_fallback():
 
     tab._refresh_graphs_panel()
 
-    assert isinstance(tab.quick_preview_panel.plot_view, PlotView)
+    assert isinstance(tab.graph_workspace.cards()[0].plot_view, PlotView)
     assert "fallback" in tab.graph_state.latest_plot_html
 
 
-def test_notebook_quick_preview_renders_series_plot_from_namespace_dropdowns():
+def test_notebook_graph_workspace_falls_back_to_latest_plot_when_first_card_has_no_selection():
+    _app()
+    tab = NotebookTab()
+    tab.execution_engine.execute("import numpy as np\nx = np.arange(4.0)\ny = x**2")
+    tab.cells[0].last_result = ExecutionResult(
+        outputs=[
+            ExecutionOutput(
+                kind="plotly",
+                data={"html": "<div>latest-plot-fallback</div>", "text": "Plotly Figure"},
+            )
+        ]
+    )
+
+    tab._refresh_graphs_panel()
+    first_card = tab.graph_workspace.cards()[0]
+    first_card.y_combo.set_checked_values([])
+    first_card.refresh_plot()
+
+    assert "latest executed notebook plot" in first_card.status_label.text().lower()
+    assert first_card.current_figure() is not None
+
+
+def test_notebook_graph_workspace_renders_series_plot_from_namespace_dropdowns():
     _app()
     tab = NotebookTab()
     tab.execution_engine.execute("import numpy as np\nx = np.arange(5)\nphi = x**2")
     tab._refresh_graphs_panel()
 
-    assert tab.quick_preview_panel.x_combo.findData("x") >= 0
-    assert "phi" in tab.quick_preview_panel.y_combo.checked_values()
-    figure = tab.quick_preview_panel.current_figure()
+    first_card = tab.graph_workspace.cards()[0]
+    assert first_card.x_combo.findData("x") >= 0
+    assert "phi" in first_card.y_combo.checked_values()
+    figure = first_card.current_figure()
     assert len(figure.data) == 1
     assert figure.data[0].name == "phi"
-    assert figure.layout.height == 360
+    assert figure.layout.height >= 520
     assert figure.layout.width is None
 
 
-def test_notebook_quick_preview_switches_to_evolution_mode():
+def test_notebook_graph_workspace_switches_to_evolution_mode():
     _app()
     tab = NotebookTab()
     tab.execution_engine.execute(
@@ -663,23 +733,36 @@ def test_notebook_quick_preview_switches_to_evolution_mode():
     )
     tab._refresh_graphs_panel()
 
-    tab.quick_preview_panel.mode_combo.setCurrentIndex(tab.quick_preview_panel.mode_combo.findData("evolution"))
-    tab.quick_preview_panel.evolution_matrix_combo.setCurrentIndex(
-        tab.quick_preview_panel.evolution_matrix_combo.findData("history")
+    first_card = tab.graph_workspace.cards()[0]
+    first_card.mode_combo.setCurrentIndex(first_card.mode_combo.findData("evolution"))
+    first_card.evolution_matrix_combo.setCurrentIndex(
+        first_card.evolution_matrix_combo.findData("history")
     )
-    tab.quick_preview_panel.evolution_time_combo.setCurrentIndex(
-        tab.quick_preview_panel.evolution_time_combo.findData("time")
+    first_card.evolution_time_combo.setCurrentIndex(
+        first_card.evolution_time_combo.findData("time")
     )
-    tab.quick_preview_panel.evolution_value_combo.setCurrentIndex(
-        tab.quick_preview_panel.evolution_value_combo.findData("x")
+    first_card.evolution_value_combo.setCurrentIndex(
+        first_card.evolution_value_combo.findData("x")
     )
-    tab.quick_preview_panel.evolution_step_slider.setValue(2)
-    tab.quick_preview_panel.refresh_preview()
+    first_card.evolution_step_slider.setValue(2)
+    first_card.refresh_plot()
 
-    figure = tab.quick_preview_panel.current_figure()
-    assert tab.quick_preview_panel.mode_combo.currentData() == "evolution"
+    figure = first_card.current_figure()
+    assert first_card.mode_combo.currentData() == "evolution"
     assert len(figure.data) == 1
     assert list(figure.data[0].y) == [3.0, 4.0, 5.0, 6.0]
+
+
+def test_notebook_graph_workspace_defaults_to_evolution_for_2d_only_namespace():
+    _app()
+    tab = NotebookTab()
+    tab.execution_engine.execute("import numpy as np\nhistory = np.arange(12.0).reshape(3, 4)")
+    tab._refresh_graphs_panel()
+
+    first_card = tab.graph_workspace.cards()[0]
+    assert first_card.mode_combo.currentData() == "evolution"
+    assert first_card.evolution_matrix_combo.currentData() == "history"
+    assert "updated" in first_card.status_label.text().lower() or "evolution" in first_card.status_label.text().lower()
 
 
 def test_graph_panel_reuses_existing_widgets_for_unchanged_plot():
@@ -690,14 +773,41 @@ def test_graph_panel_reuses_existing_widgets_for_unchanged_plot():
         outputs=[ExecutionOutput(kind="plotly", data={"html": html, "text": "Plotly Figure"})]
     )
     tab._refresh_graphs_panel()
-    first_widget = tab.quick_preview_panel.plot_view
+    first_widget = tab.graph_workspace.cards()[0].plot_view
 
     tab.add_code_cell()
     tab.cells[1].last_result = ExecutionResult(outputs=[ExecutionOutput(kind="value", data={"text": "42"})])
     tab._refresh_graphs_panel()
 
-    assert tab.quick_preview_panel.plot_view is first_widget
+    assert tab.graph_workspace.cards()[0].plot_view is first_widget
     assert tab.graph_state.latest_plot_html == html
+
+
+def test_notebook_graph_workspace_adds_and_removes_independent_cards():
+    _app()
+    tab = NotebookTab()
+    tab.execution_engine.execute("import numpy as np\nx = np.arange(5)\nphi = x**2\nforce = x + 1")
+    tab._refresh_graphs_panel()
+
+    assert tab.graph_workspace.card_count() == 1
+    tab.graph_workspace.add_graph_card()
+    assert tab.graph_workspace.card_count() == 2
+
+    first_card, second_card = tab.graph_workspace.cards()
+    first_card.x_combo.setCurrentIndex(first_card.x_combo.findData("x"))
+    first_card.y_combo.set_checked_values(["phi"])
+    first_card.refresh_plot()
+    second_card.x_combo.setCurrentIndex(second_card.x_combo.findData("x"))
+    second_card.y_combo.set_checked_values(["force"])
+    second_card.refresh_plot()
+
+    first_names = [trace.name for trace in first_card.current_figure().data]
+    second_names = [trace.name for trace in second_card.current_figure().data]
+    assert first_names == ["phi"]
+    assert second_names == ["force"]
+
+    tab.graph_workspace.remove_graph_card(second_card)
+    assert tab.graph_workspace.card_count() == 1
 
 
 def test_notebook_tab_uses_namespace_snapshot_methods_for_ui_refreshes():

@@ -37,7 +37,7 @@ from pyside_app.functions_reference import build_functions_reference_html
 from pyside_app.execution_engine import ExecutionEngine, ExecutionOutput, ExecutionResult
 from pyside_app.execution_worker import ExecutionWorker
 from pyside_app.graph_state import NotebookGraphState
-from pyside_app.notebook_plot_panel import QuickGraphPreviewPanel
+from pyside_app.notebook_plot_panel import NotebookGraphWorkspace, QuickGraphPreviewPanel
 from pyside_app.storage import NotebookDocument, NotebookStorage
 
 
@@ -79,8 +79,25 @@ class NotebookTab(QWidget):
         self.lsp_client.start()
 
         root = QVBoxLayout(self)
-        self.main_splitter = QSplitter(Qt.Orientation.Horizontal, self)
-        root.addWidget(self.main_splitter)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        self.workspace_scroll = QScrollArea(self)
+        self.workspace_scroll.setWidgetResizable(True)
+        self.workspace_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.workspace_scroll.setStyleSheet("QScrollArea { background:#f0f4f8; border:none; }")
+        print("[debug][notebook-tab] init:workspace_scroll enabled=True", flush=True)
+        root.addWidget(self.workspace_scroll)
+
+        self.workspace_content = QWidget(self.workspace_scroll)
+        self.workspace_content.setStyleSheet("background:#f0f4f8;")
+        self.workspace_scroll.setWidget(self.workspace_content)
+
+        workspace_layout = QVBoxLayout(self.workspace_content)
+        workspace_layout.setContentsMargins(12, 12, 12, 12)
+        workspace_layout.setSpacing(0)
+
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal, self.workspace_content)
+        workspace_layout.addWidget(self.main_splitter)
 
         self.sidebar = self._build_sidebar()
         self.main_splitter.addWidget(self.sidebar)
@@ -371,6 +388,8 @@ class NotebookTab(QWidget):
         wrapper = QWidget(self)
         wrapper.setStyleSheet("background:#ffffff;")
         wrapper_layout = QVBoxLayout(wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.setSpacing(8)
         header = QHBoxLayout()
         label = QLabel(title, wrapper)
         label.setStyleSheet("color:#001f41; font-weight:700; font-size:13px;")
@@ -399,19 +418,15 @@ class NotebookTab(QWidget):
         header.addWidget(insert_example)
         wrapper_layout.addLayout(header)
 
-        scroll = QScrollArea(wrapper)
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { background:#ffffff; border:1px solid #d1dce8; }")
-        container = QWidget(scroll)
+        container = QWidget(wrapper)
         container.setStyleSheet("background:#ffffff;")
         print(f"[debug][notebook-tab] build_column container_style column={column!r} background='#ffffff'", flush=True)
         layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
         layout.addStretch(1)
-        scroll.setWidget(container)
-        wrapper_layout.addWidget(scroll, 1)
+        wrapper_layout.addWidget(container, 1)
 
-        self.left_scroll = scroll
         self.left_container = container
         return wrapper, layout
 
@@ -443,7 +458,7 @@ class NotebookTab(QWidget):
         return wrapper
 
     def _build_graphs_panel(self) -> QWidget:
-        print("[debug][notebook-tab] build_graphs_panel:new_controller", flush=True)
+        print("[debug][notebook-tab] build_graphs_panel:quick_preview_panel", flush=True)
         self.quick_preview_panel = QuickGraphPreviewPanel(self)
         return self.quick_preview_panel
 

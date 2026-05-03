@@ -145,6 +145,8 @@ def test_build_notebook_plot_figure_applies_scientific_style_options():
     assert figure.layout.xaxis.ticklen == 10
     assert figure.layout.xaxis.minor.ticks == "inside"
     assert figure.layout.xaxis.minor.ticklen == 5
+    assert figure.layout.xaxis.automargin is True
+    assert figure.layout.margin.b >= 80
     assert figure.layout.width is None
     assert figure.layout.height == 700
 
@@ -254,6 +256,27 @@ def test_notebook_plot_panel_applies_per_series_style_controls():
     assert trace_map["phi_exact"].line.color == "#9467bd"
 
 
+def test_notebook_plot_panel_uses_auto_colors_by_default_for_multiple_series():
+    _app()
+    panel = NotebookPlotPanel()
+    panel.set_namespace(
+        {
+            "x": np.array([0.0, 1.0, 2.0]),
+            "force": np.array([0.0, 1.0, 0.0]),
+            "phi": np.array([0.0, 0.5, 1.0]),
+        }
+    )
+
+    panel.x_combo.setCurrentIndex(panel.x_combo.findData("x"))
+    panel.y_combo.set_checked_values(["force", "phi"])
+    panel.refresh_controller_plot()
+
+    figure = panel.current_controller_figure()
+    trace_map = {trace.name: trace for trace in figure.data}
+    assert trace_map["force"].line.color == "#1f77b4"
+    assert trace_map["phi"].line.color == "#ff7f0e"
+
+
 def test_notebook_plot_panel_applies_scientific_style_controls():
     _app()
     panel = NotebookPlotPanel()
@@ -290,6 +313,8 @@ def test_notebook_plot_panel_applies_scientific_style_controls():
     assert figure.layout.xaxis.minor.ticks == "inside"
     assert panel.controller_plot.minimumHeight() >= 460
     assert figure.layout.xaxis.minor.ticklen == 5
+    assert figure.layout.xaxis.automargin is True
+    assert figure.layout.margin.b >= 80
 
 
 def test_notebook_plot_panel_rebuilds_series_style_rows_if_selection_exists_without_signal():
