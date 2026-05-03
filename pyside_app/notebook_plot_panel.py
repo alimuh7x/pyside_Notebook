@@ -335,47 +335,56 @@ class DataSourceWidget(QWidget):
         self._notebook_arrays: dict[str, np.ndarray] = {}
         self._csv_arrays: dict[str, np.ndarray] = {}
 
+        # Use objectName so the border/background only applies to THIS widget,
+        # not to child radio buttons or buttons (avoids invisible-widget bug)
+        self.setObjectName("dataSourceBox")
         self.setStyleSheet(
-            "QWidget { background:#f0f4f8; border:1px solid #e2e8f0; border-radius:4px; }"
-            "QLabel { border:none; background:transparent; }"
-            "QRadioButton { border:none; background:transparent; " + _LBL_SS + " }"
-            "QPushButton { border:1px solid #cbd5e1; border-radius:4px;"
-            " padding:2px 8px; font-size:11px; background:#ffffff; }"
+            "#dataSourceBox { background:#f0f4f8; border:1px solid #cdd8e3;"
+            " border-radius:4px; }"
         )
+
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 6, 8, 6)
-        root.setSpacing(4)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
 
-        top = QHBoxLayout()
         src_lbl = QLabel("Data source", self)
-        src_lbl.setStyleSheet("color:#355070; font-weight:700; font-size:11px; border:none;")
-        self._notebook_radio = QRadioButton("Notebook", self)
-        self._notebook_radio.setChecked(True)
-        self._csv_radio = QRadioButton("CSV file", self)
-        grp = QButtonGroup(self)
-        grp.addButton(self._notebook_radio)
-        grp.addButton(self._csv_radio)
-        top.addWidget(src_lbl)
-        top.addWidget(self._notebook_radio)
-        top.addWidget(self._csv_radio)
-        top.addStretch(1)
-        root.addLayout(top)
+        src_lbl.setStyleSheet("color:#355070; font-weight:700; font-size:12px;")
+        root.addWidget(src_lbl)
 
+        radio_row = QHBoxLayout()
+        radio_row.setSpacing(16)
+        self._notebook_radio = QRadioButton("Notebook arrays", self)
+        self._notebook_radio.setChecked(True)
+        self._csv_radio = QRadioButton("CSV / text file", self)
+        # Keep QButtonGroup as instance attribute — local vars get garbage-collected
+        self._btn_group = QButtonGroup(self)
+        self._btn_group.addButton(self._notebook_radio)
+        self._btn_group.addButton(self._csv_radio)
+        radio_row.addWidget(self._notebook_radio)
+        radio_row.addWidget(self._csv_radio)
+        radio_row.addStretch(1)
+        root.addLayout(radio_row)
+
+        # File row — shown only when CSV is selected
         self._csv_row = QWidget(self)
-        self._csv_row.setStyleSheet("QWidget { background:transparent; border:none; }")
         cr = QHBoxLayout(self._csv_row)
         cr.setContentsMargins(0, 0, 0, 0)
-        cr.setSpacing(6)
+        cr.setSpacing(8)
         self._path_label = QLabel("No file selected", self._csv_row)
-        self._path_label.setStyleSheet("color:#64748b; font-size:11px; border:none;")
-        open_btn = QPushButton("Open…", self._csv_row)
-        open_btn.clicked.connect(self._open_file)
+        self._path_label.setStyleSheet("color:#64748b; font-size:11px;")
+        self._open_btn = QPushButton("Open file…", self._csv_row)
+        self._open_btn.setStyleSheet(
+            "QPushButton { border:1px solid #93c5fd; border-radius:4px;"
+            " padding:3px 10px; font-size:12px; background:#eff6ff; color:#1d4ed8; }"
+            "QPushButton:hover { background:#dbeafe; }"
+        )
+        self._open_btn.clicked.connect(self._open_file)
         cr.addWidget(self._path_label, 1)
-        cr.addWidget(open_btn)
+        cr.addWidget(self._open_btn)
         self._csv_row.hide()
         root.addWidget(self._csv_row)
 
-        grp.buttonToggled.connect(self._on_toggle)
+        self._btn_group.buttonToggled.connect(self._on_toggle)
 
     # ── public ───────────────────────────────────────────────────────
 
