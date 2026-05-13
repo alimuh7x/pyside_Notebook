@@ -3,28 +3,53 @@ from __future__ import annotations
 from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QWidget
 
+_COMBO_POPUP_STYLE = (
+    "QAbstractItemView {"
+    " background:#ffffff;"
+    " color:#0f1b2b;"
+    " border:1px solid #d1dce8;"
+    " selection-background-color:#c7def5;"
+    " selection-color:#0f1b2b;"
+    " outline:0;"
+    "}"
+    "QAbstractItemView::item:hover {"
+    " background:#dbeafe;"
+    " color:#0f1b2b;"
+    "}"
+)
+
 
 class AutoCloseComboBox(QComboBox):
+    """Standard combo box with shared popup styling and verbose debug hooks."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Initialize the combo box and style its popup view."""
         super().__init__(parent)
         print("[debug][auto-close-combo] init", flush=True)
         self.view().setMouseTracking(True)
         self.view().viewport().setMouseTracking(True)
+        self.view().setStyleSheet(_COMBO_POPUP_STYLE)
+        print("[debug][auto-close-combo] popup_style background='#ffffff' text='#0f1b2b'", flush=True)
         print("[debug][auto-close-combo] mouse_tracking enabled=True", flush=True)
         self.activated.connect(self._on_activated)
         self.currentIndexChanged.connect(self._on_index_changed)
 
     def _on_activated(self, index: int) -> None:
+        """Log activation events so combo interactions are easy to trace."""
         print(f"[debug][auto-close-combo] activated index={index}", flush=True)
 
     def _on_index_changed(self, index: int) -> None:
+        """Log selection changes for troubleshooting UI state updates."""
         print(f"[debug][auto-close-combo] current_index_changed index={index}", flush=True)
 
 
 class CheckableComboBox(QComboBox):
+    """Combo box that behaves like a compact multi-select checklist."""
+
     checkedItemsChanged = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Initialize the checkable popup and readonly summary line edit."""
         super().__init__(parent)
         print("[debug][checkable-combo] init", flush=True)
         self.setEditable(True)
@@ -32,11 +57,14 @@ class CheckableComboBox(QComboBox):
         self.lineEdit().setPlaceholderText("Select Y variable(s)")
         self.view().setMouseTracking(True)
         self.view().viewport().setMouseTracking(True)
+        self.view().setStyleSheet(_COMBO_POPUP_STYLE)
+        print("[debug][checkable-combo] popup_style background='#ffffff' text='#0f1b2b'", flush=True)
         print("[debug][checkable-combo] mouse_tracking enabled=True", flush=True)
         self.view().clicked.connect(self._toggle_clicked_item)
         self._update_display_text()
 
     def add_check_item(self, text: str, data: object, checked: bool = False) -> None:
+        """Append a checkable item and optionally mark it selected immediately."""
         print(f"[debug][checkable-combo] add_item text={text!r} checked={checked}", flush=True)
         self.addItem(text, data)
         item = self.model().item(self.count() - 1, 0)
@@ -50,6 +78,7 @@ class CheckableComboBox(QComboBox):
             self.checkedItemsChanged.emit()
 
     def checked_values(self) -> list[str]:
+        """Return the user-data values for all currently checked items."""
         values: list[str] = []
         for index in range(self.count()):
             item = self.model().item(index, 0)
@@ -63,6 +92,7 @@ class CheckableComboBox(QComboBox):
         return values
 
     def set_checked_values(self, values: list[str]) -> None:
+        """Apply a full checked-state snapshot to the combo items."""
         selected = set(values)
         print(f"[debug][checkable-combo] set_checked_values values={sorted(selected)!r}", flush=True)
         for index in range(self.count()):
@@ -75,11 +105,13 @@ class CheckableComboBox(QComboBox):
         self.checkedItemsChanged.emit()
 
     def clear(self) -> None:
+        """Remove all items and reset the summary display text."""
         print("[debug][checkable-combo] clear", flush=True)
         super().clear()
         self._update_display_text()
 
     def _toggle_clicked_item(self, index: QModelIndex) -> None:
+        """Flip one item's check state without closing the popup."""
         item = self.model().itemFromIndex(index)
         if item is None:
             return
@@ -93,6 +125,7 @@ class CheckableComboBox(QComboBox):
         self.checkedItemsChanged.emit()
 
     def _update_display_text(self) -> None:
+        """Summarize the current checked selection in the combo line edit."""
         labels: list[str] = []
         for index in range(self.count()):
             item = self.model().item(index, 0)

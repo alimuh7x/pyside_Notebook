@@ -102,6 +102,7 @@ class ExecutionResult:
 
 
 def _format_value(value: Any) -> str:
+    """Convert a Python value into the text shown in notebook outputs."""
     if isinstance(value, go.Figure):
         return "Plotly Figure"
     if isinstance(value, pd.DataFrame):
@@ -112,6 +113,7 @@ def _format_value(value: Any) -> str:
 
 
 def _plotly_html(figure: go.Figure) -> str:
+    """Render a Plotly figure into embeddable HTML for the UI."""
     print("[debug][execution-engine] plotly:html:start", flush=True)
     html = figure.to_html(
         include_plotlyjs=True,
@@ -127,6 +129,7 @@ def _plotly_html(figure: go.Figure) -> str:
 
 
 def _output_from_value(value: Any) -> ExecutionOutput | None:
+    """Convert the final expression value into a structured notebook output."""
     if value is None:
         print("[debug][execution-engine] value_output:skip_none", flush=True)
         return None
@@ -152,6 +155,7 @@ def _output_from_value(value: Any) -> ExecutionOutput | None:
 
 
 def _prepare_matplotlib() -> Any | None:
+    """Prepare Matplotlib for headless notebook execution if it is available."""
     try:
         import matplotlib
 
@@ -169,6 +173,7 @@ def _prepare_matplotlib() -> Any | None:
 
 
 def _convert_matplotlib_to_plotly(figure: Any) -> go.Figure | None:
+    """Try to convert one Matplotlib figure into an equivalent Plotly figure."""
     try:
         from plotly.tools import mpl_to_plotly
     except Exception as exc:
@@ -185,6 +190,7 @@ def _convert_matplotlib_to_plotly(figure: Any) -> go.Figure | None:
 
 
 def _collect_matplotlib_outputs(plt: Any | None) -> list[ExecutionOutput]:
+    """Collect every Matplotlib figure created during execution as notebook outputs."""
     if plt is None:
         return []
     outputs: list[ExecutionOutput] = []
@@ -229,6 +235,7 @@ def _collect_matplotlib_outputs(plt: Any | None) -> list[ExecutionOutput]:
 
 
 def _split_last_expression(source: str) -> tuple[ast.Module, ast.expr | None]:
+    """Split code into exec statements plus an optional trailing expression."""
     parsed = ast.parse(source, mode="exec")
     if parsed.body and isinstance(parsed.body[-1], ast.Expr):
         last_expr = parsed.body[-1].value
@@ -244,6 +251,7 @@ def _safe_import(
     fromlist: tuple[str, ...] | list[str] | None = (),
     level: int = 0,
 ) -> Any:
+    """Restrict notebook imports to a predefined safe allowlist."""
     normalized_fromlist = tuple(fromlist or ())
     print(
         f"[debug][execution-engine] safe_import:start name={name!r} fromlist={normalized_fromlist!r} level={level}",
@@ -261,6 +269,7 @@ def _safe_import(
 
 
 def _safe_builtins() -> dict[str, Any]:
+    """Build the reduced builtin namespace available to notebook code."""
     safe = {name: getattr(builtins, name) for name in SAFE_BUILTIN_NAMES}
     safe["__import__"] = _safe_import
     print(f"[debug][execution-engine] safe_builtins:count count={len(safe)}", flush=True)
@@ -268,6 +277,7 @@ def _safe_builtins() -> dict[str, Any]:
 
 
 def build_base_namespace() -> dict[str, Any]:
+    """Create the default execution namespace shared by notebook cells."""
     callable_min = UNIT_CONSTANTS["min"]
     namespace: dict[str, Any] = {
         "__builtins__": _safe_builtins(),
@@ -289,7 +299,10 @@ def build_base_namespace() -> dict[str, Any]:
 
 
 class ExecutionEngine:
+    """Execute notebook code inside a persistent, thread-safe Python namespace."""
+
     def __init__(self, initial_namespace: dict[str, Any] | None = None) -> None:
+        """Initialize the engine, base namespace, and restart state."""
         self._base_namespace = build_base_namespace()
         self.namespace: dict[str, Any] = {}
         self._lock = threading.Lock()
@@ -300,9 +313,11 @@ class ExecutionEngine:
                 self.namespace.update(initial_namespace)
 
     def _reset_namespace_unlocked(self) -> None:
+        """Reset the runtime namespace back to the base environment."""
         self.namespace = dict(self._base_namespace)
 
     def restart(self) -> bool:
+        """Reset the namespace immediately or mark a restart for the next safe point."""
         if self._lock.acquire(timeout=0.05):
             try:
                 self._restart_pending = False
@@ -314,6 +329,7 @@ class ExecutionEngine:
         return False
 
     def _apply_pending_restart_if_needed(self) -> None:
+        """Apply a deferred restart request before or after execution."""
         if not self._restart_pending:
             return
         with self._lock:
@@ -322,6 +338,7 @@ class ExecutionEngine:
                 self._restart_pending = False
 
     def execute(self, source: str) -> ExecutionResult:
+        """Run one notebook cell and return normalized outputs and errors."""
         self._apply_pending_restart_if_needed()
         print(f"[debug][execution-engine] execute: source={source!r}", flush=True)
         result = ExecutionResult()
@@ -380,6 +397,7 @@ class ExecutionEngine:
         return result
 
     def get_namespace(self) -> dict[str, Any]:
+        """Return a thread-safe snapshot of the current execution namespace."""
         with self._lock:
             snapshot = dict(self.namespace)
         print(f"[debug][execution-engine] get_namespace count={len(snapshot)}", flush=True)

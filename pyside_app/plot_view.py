@@ -17,6 +17,7 @@ except Exception:  # pragma: no cover - environment-specific fallback
 
 
 def _local_mathjax_url() -> str:
+    """Return the local MathJax asset URL used by embedded plot HTML."""
     asset_path = Path(__file__).resolve().parent.parent / "assets" / "mathjax" / "tex-svg.js"
     if not asset_path.exists():
         print(f"[debug][plot-view] mathjax:missing path={str(asset_path)!r}", flush=True)
@@ -27,7 +28,10 @@ def _local_mathjax_url() -> str:
 
 
 class PlotView(QWidget):
+    """Render Plotly HTML inside Qt using WebEngine or a QTextBrowser fallback."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Create the HTML host widget and temporary file location."""
         super().__init__(parent)
         print("[debug][plot-view] init:start", flush=True)
         self._html_dir = Path(tempfile.gettempdir()) / "calculation_notebook_plotview"
@@ -54,20 +58,24 @@ class PlotView(QWidget):
             self._view.loadFinished.connect(self._on_load_finished)
 
     def _on_load_finished(self, ok: bool) -> None:
+        """Log the result of a WebEngine HTML load."""
         print(f"[debug][plot-view] load_finished ok={ok} path={str(self._html_path)!r}", flush=True)
 
     def _cleanup_temp_file(self, *args: Any) -> None:
+        """Delete the temporary HTML file created for the current plot."""
         print(f"[debug][plot-view] cleanup_temp_file:start path={str(self._html_path)!r}", flush=True)
         self._html_path.unlink(missing_ok=True)
         print(f"[debug][plot-view] cleanup_temp_file:done exists={self._html_path.exists()}", flush=True)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        """Clean up temporary plot files when the widget closes."""
         print("[debug][plot-view] close_event:start", flush=True)
         self._cleanup_temp_file()
         super().closeEvent(event)
         print("[debug][plot-view] close_event:done", flush=True)
 
     def set_html(self, html: str) -> None:
+        """Wrap and display raw plot HTML inside the embedded browser widget."""
         print(f"[debug][plot-view] set_html length={len(html)}", flush=True)
         mathjax_url = _local_mathjax_url()
         mathjax_loader = (
@@ -79,8 +87,8 @@ class PlotView(QWidget):
         wrapped_html = (
             "<html><head><style>"
             "html, body { margin: 0; padding: 0; overflow: hidden; background: white; width: 100%; height: 100%; }"
-            "#plot-root { width: 100%; min-height: 100%; overflow: hidden; background: white; }"
-            ".js-plotly-plot, .plot-container { width: 100% !important; min-height: 100%; }"
+            "#plot-root { width: 100%; min-height: 100%; overflow: auto; background: white; display:flex; justify-content:center; align-items:flex-start; }"
+            ".js-plotly-plot, .plot-container { max-width:100%; min-height:100%; margin:0 auto; }"
             ".main-svg { overflow: visible !important; }"
             "</style>"
             f"{mathjax_loader}"
@@ -102,6 +110,7 @@ class PlotView(QWidget):
             self._view.setHtml(wrapped_html)
 
     def set_figure(self, figure: Any) -> None:
+        """Convert a Plotly figure object to HTML and display it."""
         html = figure.to_html(
             include_plotlyjs=True,
             full_html=False,

@@ -27,7 +27,10 @@ from pyside_app.plot_view import PlotView
 
 
 class AutoResizePlainTextEdit(QPlainTextEdit):
+    """Plain-text editor that grows vertically to fit its document."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Configure the editor for auto-resize and no internal scrollbars."""
         super().__init__(parent)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -37,10 +40,12 @@ class AutoResizePlainTextEdit(QPlainTextEdit):
         self._update_height()
 
     def setPlainText(self, text: str) -> None:
+        """Set editor contents and immediately recompute widget height."""
         super().setPlainText(text)
         self._update_height()
 
     def _update_height(self, *_args: object) -> None:
+        """Resize the editor to match its current number of text lines."""
         line_spacing = self.fontMetrics().lineSpacing()
         document_height = max(1, self.blockCount()) * line_spacing
         frame = self.frameWidth() * 2
@@ -52,6 +57,8 @@ class AutoResizePlainTextEdit(QPlainTextEdit):
 
 
 class NotebookCodeEditor(AutoResizePlainTextEdit):
+    """Code editor with namespace completions, LSP hooks, and diagnostics support."""
+
     def __init__(
         self,
         parent: QWidget | None = None,
@@ -59,6 +66,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         document_uri: str = "",
         completion_words: list[str] | None = None,
     ) -> None:
+        """Initialize the code editor, completer, and optional LSP integration."""
         super().__init__(parent)
         self.document_uri = document_uri
         self._lsp_client = lsp_client
@@ -117,31 +125,37 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
             self.attach_lsp_client(self._lsp_client, self.document_uri)
 
     def attach_lsp_client(self, lsp_client: NotebookLspClient, document_uri: str) -> None:
+        """Attach an LSP client and open this editor as a tracked document."""
         self._lsp_client = lsp_client
         self.document_uri = document_uri
         print(f"[debug][code-editor] attach_lsp uri={self.document_uri!r}", flush=True)
         self._open_document_with_lsp()
 
     def completion_words(self) -> list[str]:
+        """Return the currently visible completion word list."""
         words = self._completer_model.stringList()
         print(f"[debug][code-editor] completion_words count={len(words)}", flush=True)
         return words
 
     def set_completion_words(self, words: list[str]) -> None:
+        """Replace namespace-derived completion words."""
         self._namespace_completion_words = sorted(set(words))
         self._update_completion_model()
 
     def set_lsp_completions(self, words: list[str]) -> None:
+        """Update completion candidates returned by the LSP service."""
         self._lsp_completion_words = sorted(set(word for word in words if word))
         print(f"[debug][code-editor] set_lsp_completions count={len(self._lsp_completion_words)}", flush=True)
         self._update_completion_model()
         self._show_completion_popup()
 
     def diagnostic_messages(self) -> list[str]:
+        """Return the current diagnostic messages shown for this editor."""
         print(f"[debug][code-editor] diagnostic_messages count={len(self._diagnostic_messages)}", flush=True)
         return list(self._diagnostic_messages)
 
     def apply_diagnostics(self, diagnostics: list[dict[str, Any]]) -> None:
+        """Underline diagnostic ranges and expose their messages as a tooltip."""
         print(f"[debug][code-editor] apply_diagnostics count={len(diagnostics)}", flush=True)
         self._diagnostic_messages = [str(item.get("message", "")) for item in diagnostics if item.get("message")]
         selections: list[QTextEdit.ExtraSelection] = []
@@ -170,6 +184,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         print(f"[debug][code-editor] apply_diagnostics:done tooltip={tooltip!r}", flush=True)
 
     def keyPressEvent(self, event: Any) -> None:
+        """Handle completion acceptance, indentation shortcuts, and popup refresh."""
         if self._completer.popup().isVisible() and event.key() in {Qt.Key.Key_Tab, Qt.Key.Key_Return, Qt.Key.Key_Enter}:
             completion = self._completer.currentCompletion()
             print(f"[debug][code-editor] keypress:accept_completion completion={completion!r}", flush=True)
@@ -202,17 +217,20 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
             self._show_completion_popup()
 
     def _handle_text_changed(self) -> None:
+        """Debounce document sync and completion refresh after edits."""
         print(f"[debug][code-editor] text_changed uri={self.document_uri!r}", flush=True)
         self._sync_timer.start()
         if self._current_completion_prefix():
             self._completion_timer.start()
 
     def _update_completion_model(self) -> None:
+        """Merge namespace and LSP completion sources into one popup model."""
         words = sorted(set(self._namespace_completion_words) | set(self._lsp_completion_words))
         self._completer_model.setStringList(words)
         print(f"[debug][code-editor] update_completion_model count={len(words)}", flush=True)
 
     def _indent_selection(self) -> None:
+        """Indent the current line or selected block by four spaces."""
         cursor = self.textCursor()
         if not cursor.hasSelection():
             cursor.insertText("    ")
@@ -236,6 +254,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         print(f"[debug][code-editor] indent_selection start_block={start_block} end_block={end_block}", flush=True)
 
     def _unindent_selection(self) -> None:
+        """Remove up to four leading spaces from each selected line."""
         cursor = self.textCursor()
         start = cursor.selectionStart()
         end = cursor.selectionEnd()
@@ -258,6 +277,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         print(f"[debug][code-editor] unindent_selection start_block={start_block} end_block={end_block}", flush=True)
 
     def _current_completion_prefix(self) -> str:
+        """Return the identifier fragment immediately before the cursor."""
         cursor = self.textCursor()
         text = self.toPlainText()
         position = cursor.position()
@@ -269,6 +289,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         return prefix
 
     def _show_completion_popup(self) -> None:
+        """Open or hide the completion popup based on the current prefix."""
         prefix = self._current_completion_prefix()
         if not prefix:
             self._completer.popup().hide()
@@ -286,6 +307,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         print(f"[debug][code-editor] show_completion_popup prefix={prefix!r}", flush=True)
 
     def _insert_completion(self, completion: str) -> None:
+        """Replace the current prefix with the chosen completion item."""
         prefix = self._current_completion_prefix()
         cursor = self.textCursor()
         for _count in range(len(prefix)):
@@ -296,6 +318,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         print(f"[debug][code-editor] insert_completion completion={completion!r}", flush=True)
 
     def _sync_document_to_lsp(self) -> None:
+        """Push the current buffer contents to the LSP client."""
         if self._lsp_client is None or not self.document_uri:
             print("[debug][code-editor] sync_document_to_lsp skipped", flush=True)
             return
@@ -303,6 +326,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         self._lsp_client.change_document(self.document_uri, self.toPlainText())
 
     def _request_completions_from_lsp(self) -> None:
+        """Ask the LSP client for completions at the current cursor position."""
         if self._lsp_client is None or not self.document_uri:
             print("[debug][code-editor] request_completions skipped", flush=True)
             return
@@ -316,6 +340,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         self._lsp_client.request_completion(self.document_uri, line, character)
 
     def _open_document_with_lsp(self) -> None:
+        """Register this editor document with the LSP client."""
         if self._lsp_client is None or not self.document_uri:
             print("[debug][code-editor] open_document_with_lsp skipped", flush=True)
             return
@@ -323,6 +348,7 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         self._lsp_client.open_document(self.document_uri, self.toPlainText())
 
     def _position_from_lsp(self, line: int, character: int) -> int:
+        """Convert an LSP line/character pair into a QTextDocument offset."""
         document = self.document()
         block = document.findBlockByNumber(line)
         if not block.isValid():
@@ -337,7 +363,10 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
 
 
 class AutoResizeTextBrowser(QTextBrowser):
+    """Read-only text or HTML viewer that resizes to its content."""
+
     def __init__(self, parent: QWidget | None = None, minimum_height: int = 48) -> None:
+        """Create the browser with automatic vertical growth enabled."""
         super().__init__(parent)
         self._minimum_height = minimum_height
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -346,14 +375,17 @@ class AutoResizeTextBrowser(QTextBrowser):
         self._update_height()
 
     def setPlainText(self, text: str) -> None:
+        """Set plain text and refresh the widget height."""
         super().setPlainText(text)
         self._update_height()
 
     def setHtml(self, text: str) -> None:
+        """Set HTML content and refresh the widget height."""
         super().setHtml(text)
         self._update_height()
 
     def _update_height(self, *_args: object) -> None:
+        """Resize the browser to fit its rendered document height."""
         document_height = self.document().documentLayout().documentSize().height()
         text_lines = max(1, len(self.toPlainText().splitlines()) or 1)
         document_height = max(document_height, text_lines * self.fontMetrics().lineSpacing())
@@ -366,6 +398,8 @@ class AutoResizeTextBrowser(QTextBrowser):
 
 
 class PythonHighlighter(QSyntaxHighlighter):
+    """Apply lightweight syntax highlighting rules to Python source text."""
+
     RULES = [
         (
             r"\b(def|class|return|import|from|as|if|elif|else|for|while|with|try|except|finally|pass|break|continue|and|or|not|in|is|lambda|yield|raise|del|global|nonlocal|True|False|None)\b",
@@ -381,6 +415,7 @@ class PythonHighlighter(QSyntaxHighlighter):
 
     @classmethod
     def _build_rules(cls) -> list[tuple[re.Pattern[str], QTextCharFormat]]:
+        """Compile and cache the regex-based syntax highlighting rules."""
         if cls._COMPILED_RULES:
             return cls._COMPILED_RULES
         for pattern, color, bold in cls.RULES:
@@ -392,23 +427,29 @@ class PythonHighlighter(QSyntaxHighlighter):
         return cls._COMPILED_RULES
 
     def __init__(self, document: Any) -> None:
+        """Attach the syntax highlighter to a document."""
         super().__init__(document)
         self._rules = self._build_rules()
 
     def highlightBlock(self, text: str) -> None:
+        """Apply all configured highlighting rules to one text block."""
         for pattern, fmt in self._rules:
             for match in pattern.finditer(text):
                 self.setFormat(match.start(), match.end() - match.start(), fmt)
 
 
 class OutputArea(QWidget):
+    """Stack rendered execution outputs for a single notebook cell."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Create the vertical output container."""
         super().__init__(parent)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(6)
 
     def clear_outputs(self) -> None:
+        """Remove and delete all currently rendered output widgets."""
         while self._layout.count():
             item = self._layout.takeAt(0)
             widget = item.widget()
@@ -416,6 +457,7 @@ class OutputArea(QWidget):
                 widget.deleteLater()
 
     def set_result(self, result: ExecutionResult) -> None:
+        """Render all outputs and any error from one execution result."""
         print(
             f"[debug][output-area] set_result outputs={len(result.outputs)} "
             f"has_error={result.error is not None}",
@@ -443,6 +485,8 @@ class OutputArea(QWidget):
 
 
 class NotebookCellWidget(QFrame):
+    """Full notebook cell widget for code or markdown content."""
+
     def __init__(
         self,
         cell_type: str = "code",
@@ -457,6 +501,7 @@ class NotebookCellWidget(QFrame):
         on_move_column: Callable[["NotebookCellWidget", str], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
+        """Build the editor, toolbar, preview area, and output area for one cell."""
         super().__init__(parent)
         self.cell_id = f"cell-{uuid.uuid4().hex[:8]}"
         self.cell_type = cell_type
@@ -619,18 +664,22 @@ class NotebookCellWidget(QFrame):
             self._show_markdown_preview()
 
     def _sync_column_buttons(self) -> None:
+        """Enable or disable move buttons based on the current column."""
         print(f"[debug][cell-widget] sync_column_buttons cell_id={self.cell_id!r} column={self.column!r}", flush=True)
         self.move_left_btn.setEnabled(self.column != "left")
         self.move_right_btn.setEnabled(self.column != "right")
 
     def set_column(self, column: str) -> None:
+        """Update the stored column assignment for this cell."""
         self.column = column
         self._sync_column_buttons()
 
     def source(self) -> str:
+        """Return the current source text from the cell editor."""
         return self.editor.toPlainText()
 
     def set_result(self, result: ExecutionResult) -> None:
+        """Apply an execution result to the cell's inline and rich output areas."""
         self.last_result = result
         if self.cell_type == "code" and hasattr(self, "inline_result"):
             self.inline_result.setPlainText("")
@@ -652,6 +701,7 @@ class NotebookCellWidget(QFrame):
             self.output_area.set_result(result)
 
     def clear_output(self) -> None:
+        """Clear all outputs currently associated with this cell."""
         print(f"[debug][cell-widget] clear_output cell_id={self.cell_id!r}", flush=True)
         self.last_result = None
         if self.cell_type == "code" and hasattr(self, "inline_result"):
@@ -660,6 +710,7 @@ class NotebookCellWidget(QFrame):
         self.output_area.hide()
 
     def toggle_preview(self) -> None:
+        """Toggle a markdown cell between editor and rendered preview modes."""
         if self.cell_type != "markdown":
             return
         showing_preview = self.preview.isHidden()
@@ -670,6 +721,7 @@ class NotebookCellWidget(QFrame):
             self._show_markdown_editor()
 
     def _show_markdown_preview(self) -> None:
+        """Render markdown source and show the preview widget."""
         print(f"[debug][cell-widget] show_markdown_preview cell_id={self.cell_id!r}", flush=True)
         if isinstance(self.preview, MarkdownPreview):
             self.preview.set_markdown(self.source())
@@ -685,6 +737,7 @@ class NotebookCellWidget(QFrame):
         self.toggle_btn.setText("Edit")
 
     def _show_markdown_editor(self) -> None:
+        """Return a markdown cell from preview mode back to edit mode."""
         print(f"[debug][cell-widget] show_markdown_editor cell_id={self.cell_id!r}", flush=True)
         self.preview.hide()
         self.editor.show()

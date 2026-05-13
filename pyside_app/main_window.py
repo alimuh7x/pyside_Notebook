@@ -10,7 +10,10 @@ from pyside_app.title_bar import TitleBar
 
 
 class MainWindow(QMainWindow):
+    """Compose the desktop shell and wire the notebook and graphs tabs together."""
+
     def __init__(self) -> None:
+        """Build the frameless main window and shared application state."""
         super().__init__()
         print("[debug][main-window] init:start", flush=True)
         self.setWindowTitle("Calculation Notebook Desktop")

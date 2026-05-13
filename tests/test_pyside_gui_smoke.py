@@ -419,6 +419,23 @@ def test_sidebar_uses_example_combo_and_updates_preview():
     assert "1D Diffusion Explicit Scheme" in tab.example_preview.toPlainText()
 
 
+def test_notebook_tab_uses_shared_12px_font_system_for_notebook_panel():
+    _app()
+    tab = NotebookTab()
+
+    assert "font-size:12px" in tab.run_all_button.styleSheet()
+    assert "font-weight:400" in tab.run_all_button.styleSheet()
+    assert "font-size:12px" in tab.status_label.styleSheet()
+    assert "font-weight:400" in tab.status_label.styleSheet()
+    assert "font-size:12px" in tab.example_combo.styleSheet()
+    assert "border-radius:8px" in tab.example_combo.styleSheet()
+    assert "padding:5px 8px" in tab.example_combo.styleSheet()
+    assert "font-size:12px" in tab.example_preview.styleSheet()
+    assert "font-size:12px" in tab.variables_browser.styleSheet()
+    assert "font-size:12px" in tab.functions_panel.styleSheet()
+    assert "font-size:12px" in tab.markdown_help_panel.styleSheet()
+
+
 def test_help_buttons_move_to_top_toolbar_and_variables_panel_is_taller():
     _app()
     tab = NotebookTab()
@@ -587,6 +604,16 @@ def test_plot_view_has_real_embedded_height():
 
     assert view.minimumHeight() >= 420
     assert view._view.minimumHeight() >= 420
+
+
+def test_shared_combo_boxes_force_light_popup_background():
+    _app()
+    combo = AutoCloseComboBox()
+    checkable = CheckableComboBox()
+
+    assert "background:#ffffff" in combo.view().styleSheet()
+    assert "selection-background-color:#c7def5" in combo.view().styleSheet()
+    assert "background:#ffffff" in checkable.view().styleSheet()
 
 
 def test_plot_view_wrapper_hides_internal_scroll_and_loads_local_mathjax():

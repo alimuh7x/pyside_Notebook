@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QLabel, QWidget
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -205,6 +206,52 @@ def test_notebook_plot_panel_updates_dropdowns_and_renders_output_graphs():
     assert panel.outputs_scroll.isHidden()
 
 
+def test_notebook_plot_panel_uses_sectioned_visual_layout_for_builder_controls():
+    _app()
+    panel = NotebookPlotPanel()
+
+    section_boxes = panel.main_card.findChildren(QWidget, "graphSection")
+    preview_boxes = panel.main_card.findChildren(QWidget, "graphPreviewCard")
+    section_titles = {
+        label.text()
+        for label in panel.main_card.findChildren(QLabel)
+        if label.text() in {"Data", "Plot Setup", "Appearance", "Labels", "Analysis", "Live Preview"}
+    }
+
+    assert len(section_boxes) >= 4
+    assert len(preview_boxes) == 1
+    assert {"Plot Setup", "Appearance", "Labels", "Live Preview"} <= section_titles
+
+
+def test_notebook_plot_panel_uses_shared_small_heading_font_across_controls():
+    _app()
+    panel = NotebookPlotPanel()
+
+    data_source_ss = panel.main_card._data_source.styleSheet()
+    card_ss = panel.main_card.styleSheet()
+    axis_selector_ss = panel.main_card._axis_selector.styleSheet()
+    plot_style_ss = panel.main_card._plot_style.styleSheet()
+    axis_labels_ss = panel.main_card._axis_labels.styleSheet()
+    analysis_ss = panel.main_card._analysis.styleSheet()
+    smooth_check_ss = panel.main_card._analysis.smooth_check.styleSheet()
+
+    assert "QRadioButton" in data_source_ss
+    assert "font-size:12px" in data_source_ss
+    assert "font-weight:400" in data_source_ss
+    assert "QComboBox" in card_ss
+    assert "font-size:12px" in card_ss
+    assert "font-size:12px" in axis_selector_ss
+    assert "font-weight:700" in axis_selector_ss
+    assert "font-size:12px" in plot_style_ss
+    assert "font-weight:700" in plot_style_ss
+    assert "font-size:12px" in axis_labels_ss
+    assert "font-weight:700" in axis_labels_ss
+    assert "font-size:12px" in analysis_ss
+    assert "font-weight:700" in analysis_ss
+    assert "font-size:12px" in smooth_check_ss
+    assert "font-weight:400" in smooth_check_ss
+
+
 def test_notebook_plot_panel_applies_per_series_style_controls():
     _app()
     panel = NotebookPlotPanel()
@@ -308,7 +355,7 @@ def test_notebook_plot_panel_applies_scientific_style_controls():
     assert figure.layout.xaxis.mirror == "allticks"
     assert figure.layout.xaxis.ticks == "inside"
     assert figure.layout.xaxis.ticklen == 10
-    assert figure.layout.width is None
+    assert figure.layout.width == 700
     assert figure.layout.height == 700
     assert figure.layout.xaxis.minor.ticks == "inside"
     assert panel.controller_plot.minimumHeight() >= 460

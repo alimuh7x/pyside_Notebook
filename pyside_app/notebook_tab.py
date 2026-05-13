@@ -1,32 +1,20 @@
 from __future__ import annotations
 
-import html
 from pathlib import Path
-from types import ModuleType
 import uuid
 
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
 from PySide6.QtCore import QThreadPool, Qt
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
-    QFileDialog,
-    QFrame,
     QHBoxLayout,
-    QLabel,
-    QPushButton,
     QScrollArea,
     QSplitter,
-    QSizePolicy,
-    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
 
 from pyside_app.cell_widgets import NotebookCellWidget, NotebookCodeEditor
-from pyside_app.controls import AutoCloseComboBox
 from pyside_app.editor_intelligence import NotebookLspClient, build_completion_words
 from pyside_app.notebook_examples import (
     get_desktop_notebook_examples,
@@ -34,45 +22,163 @@ from pyside_app.notebook_examples import (
     suggest_example_filename,
 )
 from pyside_app.functions_reference import build_functions_reference_html
-from pyside_app.execution_engine import ExecutionEngine, ExecutionOutput, ExecutionResult
+from pyside_app.execution_engine import ExecutionEngine, ExecutionResult
 from pyside_app.execution_worker import ExecutionWorker
 from pyside_app.graph_state import NotebookGraphState
-from pyside_app.notebook_plot_panel import NotebookGraphWorkspace, QuickGraphPreviewPanel
+from pyside_app.notebook_components import (
+    GraphPanelWidget,
+    HelpPanelsWidget,
+    NotebookColumnsWidget,
+    NotebookToolbar,
+    SidebarWidget,
+    summarize_namespace_value,
+)
+from pyside_app.notebook_controllers import (
+    DocumentController,
+    ExecutionController,
+    GraphController,
+    NotebookDocumentPort,
+    NotebookExecutionPort,
+    NotebookUiPort,
+)
+from pyside_app.notebook_model import NotebookState
 from pyside_app.storage import NotebookDocument, NotebookStorage
+
+_NB_TEXT_SS = "color:#355070; font-weight:400; font-size:12px;"
+_NB_MUTED_SS = "color:#64748b; font-weight:400; font-size:12px;"
+_NB_HEADING_SS = "color:#001f41; font-weight:700; font-size:12px;"
+_NB_STATUS_READY_SS = "color:#15803d; font-weight:400; font-size:12px;"
+_NB_STATUS_MUTED_SS = "color:#64748b; font-weight:400; font-size:12px;"
+_NB_STATUS_INFO_SS = "color:#2563eb; font-weight:400; font-size:12px;"
+_NB_STATUS_ERROR_SS = "color:#b60021; font-weight:400; font-size:12px;"
+_NB_GRAPH_COMBO_SS = (
+    "QComboBox {"
+    " background:#ffffff;"
+    " border:1px solid #d1dce8;"
+    " border-radius:8px;"
+    " padding:5px 8px;"
+    " font-size:12px;"
+    " font-weight:400;"
+    " color:#0f1b2b;"
+    " min-height:32px;"
+    "} "
+    "QComboBox QAbstractItemView {"
+    " selection-background-color:#c7def5;"
+    " selection-color:#0f1b2b;"
+    " outline:0;"
+    "} "
+    "QComboBox QAbstractItemView::item:hover {"
+    " background:#c7def5;"
+    " color:#0f1b2b;"
+    "}"
+)
+
+
+class _NotebookUiAdapter(NotebookUiPort):
+    def __init__(self, tab: NotebookTab) -> None:
+        self.tab = tab
+
+    def set_status(self, text: str, style: str) -> None:
+        print(f"[debug][notebook-ui-adapter] set_status text={text!r}", flush=True)
+        self.tab.status_label.setText(text)
+        self.tab.status_label.setStyleSheet(style)
+
+    def refresh_completion_words(self) -> None:
+        print("[debug][notebook-ui-adapter] refresh_completion_words", flush=True)
+        self.tab._refresh_completion_words()
+
+    def refresh_variables_panel(self) -> None:
+        print("[debug][notebook-ui-adapter] refresh_variables_panel", flush=True)
+        self.tab._refresh_variables_panel()
+
+    def schedule_autosave(self) -> None:
+        print("[debug][notebook-ui-adapter] schedule_autosave", flush=True)
+        self.tab.schedule_autosave()
+
+    def cell_count_label(self) -> str:
+        print("[debug][notebook-ui-adapter] cell_count_label", flush=True)
+        return self.tab._cell_count_label()
+
+
+class _NotebookDocumentAdapter(NotebookDocumentPort):
+    def __init__(self, tab: NotebookTab) -> None:
+        self.tab = tab
+
+    def create_cell(self, cell_type: str, source: str, column: str) -> object:
+        print(f"[debug][notebook-document-adapter] create_cell cell_type={cell_type!r}", flush=True)
+        return self.tab._create_cell(cell_type, source, column)
+
+    def insert_cell(self, cell: object) -> None:
+        print(f"[debug][notebook-document-adapter] insert_cell cell_id={getattr(cell, 'cell_id', None)!r}", flush=True)
+        self.tab._insert_cell(cell)
+
+    def delete_cell(self, cell: object) -> None:
+        print(f"[debug][notebook-document-adapter] delete_cell cell_id={getattr(cell, 'cell_id', None)!r}", flush=True)
+        self.tab.delete_cell(cell)
+
+    def rebuild_columns(self) -> None:
+        print("[debug][notebook-document-adapter] rebuild_columns", flush=True)
+        self.tab._rebuild_columns()
+
+    def apply_layout_state(self, left_column_width_pct: int) -> None:
+        print(f"[debug][notebook-document-adapter] apply_layout_state pct={left_column_width_pct}", flush=True)
+        self.tab._apply_layout_state(left_column_width_pct)
+
+    def reload_examples_list(self, select_title: str | None = None) -> None:
+        print(f"[debug][notebook-document-adapter] reload_examples_list title={select_title!r}", flush=True)
+        self.tab._reload_examples_list(select_title)
+
+
+class _NotebookExecutionAdapter(NotebookExecutionPort):
+    def __init__(self, tab: NotebookTab) -> None:
+        self.tab = tab
+
+    def cell_source(self, cell: object) -> str:
+        print(f"[debug][notebook-execution-adapter] cell_source cell_id={getattr(cell, 'cell_id', None)!r}", flush=True)
+        return cell.source()
+
+    def apply_cell_result(self, cell: object, result: ExecutionResult) -> None:
+        print(f"[debug][notebook-execution-adapter] apply_cell_result cell_id={getattr(cell, 'cell_id', None)!r}", flush=True)
+        cell.set_result(result)
+
+    def clear_cell_runtime(self, cell: object) -> None:
+        print(f"[debug][notebook-execution-adapter] clear_cell_runtime cell_id={getattr(cell, 'cell_id', None)!r}", flush=True)
+        self.tab._clear_cell_runtime(cell)
 
 
 class NotebookTab(QWidget):
+    """Own the notebook authoring workflow, execution flow, and notebook-side graphs."""
+
     def __init__(
         self,
         parent: QWidget | None = None,
         lsp_client: NotebookLspClient | None = None,
         graph_state: NotebookGraphState | None = None,
     ) -> None:
+        """Build the notebook workspace, toolbar, sidebar, and execution services."""
         super().__init__(parent)
         print("[debug][notebook-tab] init:start", flush=True)
-        self.execution_engine = ExecutionEngine()
-        self.lsp_client = lsp_client or NotebookLspClient(self)
-        self.graph_state = graph_state or NotebookGraphState(self)
-        self.storage = NotebookStorage()
-        self.thread_pool = QThreadPool.globalInstance()
-        self.current_path: Path | None = None
-        self.autosave_path = Path.home() / ".calculation_notebook_autosave.json"
-        self.cells: list[NotebookCellWidget] = []
-        self.autosave_timer = QTimer(self)
+        self.execution_engine                         = ExecutionEngine()
+        self.lsp_client                               = lsp_client or NotebookLspClient(self)
+        self.graph_state                              = graph_state or NotebookGraphState(self)
+        self.storage                                  = NotebookStorage()
+        self.thread_pool                              = QThreadPool.globalInstance()
+        self.state                                    = NotebookState()
+        self.autosave_path                            = Path.home() / ".calculation_notebook_autosave.json"
+        self.autosave_timer                           = QTimer(self)
         self.autosave_timer.setInterval(10000)
         self.autosave_timer.setSingleShot(True)
-        self.autosave_timer.timeout.connect(lambda: self.autosave_now(self.autosave_path))
-        self._done_timer = QTimer(self)
+        self.autosave_timer.timeout.connect(self._autosave_timeout)
+        self._done_timer                              = QTimer(self)
         self._done_timer.setInterval(1200)
         self._done_timer.setSingleShot(True)
         self._done_timer.timeout.connect(self._set_ready_status)
-        self._run_all_queue: list[NotebookCellWidget] = []
-        self._is_running = False
-        self._active_workers: set[ExecutionWorker] = set()
-        self._is_loading_document = False
-        self._namespace_skip = set(self.execution_engine._base_namespace.keys()) | {"__builtins__"}
-        self.examples_dir = get_notebook_examples_dir()
-        self.examples = get_desktop_notebook_examples()
+        self._namespace_skip                          = set(self.execution_engine._base_namespace.keys()) | {"__builtins__"}
+        self.examples_dir                             = get_notebook_examples_dir()
+        self.examples                                 = get_desktop_notebook_examples()
+        self.ui_adapter                               = _NotebookUiAdapter(self)
+        self.document_adapter                         = _NotebookDocumentAdapter(self)
+        self.execution_adapter                        = _NotebookExecutionAdapter(self)
         self.lsp_client.completions_ready.connect(self._handle_lsp_completions)
         self.lsp_client.diagnostics_ready.connect(self._handle_lsp_diagnostics)
         self.lsp_client.availability_changed.connect(self._handle_lsp_availability)
@@ -102,89 +208,19 @@ class NotebookTab(QWidget):
         self.sidebar = self._build_sidebar()
         self.main_splitter.addWidget(self.sidebar)
 
-        content = QWidget(self)
-        content_layout = QVBoxLayout(content)
-        toolbar = QHBoxLayout()
-        self.run_all_button = self._toolbar_button(
-            "Run All",
-            self.run_all_cells,
-            "QPushButton { background:#001f41; color:white; border-radius:6px; padding:5px 12px; font-weight:700; } "
-            "QPushButton:hover { background:#0d3567; }",
-        )
-        toolbar.addWidget(self.run_all_button)
-        self.restart_button = self._toolbar_button(
-            "Restart Kernel",
-            self.restart_kernel,
-            "QPushButton { background:#374151; color:white; border-radius:6px; padding:5px 12px; } "
-            "QPushButton:hover { background:#1f2937; }",
-        )
-        toolbar.addWidget(self.restart_button)
-        self.autosave_button = self._toolbar_button(
-            "Autosave",
-            lambda: self.autosave_now(self.autosave_path),
-            "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:5px 12px; } "
-            "QPushButton:hover { background:#cbd5e1; }",
-        )
-        toolbar.addWidget(self.autosave_button)
-        self.save_button = self._toolbar_button(
-            "Save",
-            self.save_document,
-            "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:5px 12px; } "
-            "QPushButton:hover { background:#cbd5e1; }",
-        )
-        toolbar.addWidget(self.save_button)
-        self.save_example_button = self._toolbar_button(
-            "Save Example",
-            self.save_example_document,
-            "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:5px 12px; } "
-            "QPushButton:hover { background:#cbd5e1; }",
-        )
-        toolbar.addWidget(self.save_example_button)
-        self.open_button = self._toolbar_button(
-            "Open",
-            self.open_document,
-            "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:5px 12px; } "
-            "QPushButton:hover { background:#cbd5e1; }",
-        )
-        toolbar.addWidget(self.open_button)
-        toolbar.addStretch(1)
-        self.functions_toggle_button = self._toolbar_button(
-            "Functions",
-            self.toggle_functions_panel,
-            "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:5px 12px; } "
-            "QPushButton:hover { background:#cbd5e1; }",
-        )
-        toolbar.addWidget(self.functions_toggle_button)
-        self.markdown_toggle_button = self._toolbar_button(
-            "Markdown Help",
-            self.toggle_markdown_help,
-            "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:5px 12px; } "
-            "QPushButton:hover { background:#cbd5e1; }",
-        )
-        toolbar.addWidget(self.markdown_toggle_button)
-        self.status_label = QLabel("Ready", self)
-        self.status_label.setStyleSheet("color: #15803d; font-weight: 600;")
-        toolbar.addWidget(self.status_label)
-        content_layout.addLayout(toolbar)
+        content             = QWidget(self)
+        content_layout      = QVBoxLayout(content)
+        self.toolbar_widget = self._build_toolbar()
+        content_layout.addWidget(self.toolbar_widget)
 
-        self.help_panels_container = QWidget(content)
-        help_panels_layout = QVBoxLayout(self.help_panels_container)
-        help_panels_layout.setContentsMargins(0, 0, 0, 0)
-        help_panels_layout.setSpacing(8)
-        self.help_panels_container.setMaximumWidth(460)
-        self.help_panels_container.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.help_panels_container = HelpPanelsWidget(
+            self._functions_reference_html(),
+            self._markdown_help_html(),
+            content,
+        )
 
-        self.functions_panel = QTextBrowser(self.help_panels_container)
-        self.functions_panel.setHtml(self._functions_reference_html())
-        self.functions_panel.hide()
-        self.functions_panel.setMinimumHeight(180)
-        help_panels_layout.addWidget(self.functions_panel)
-
-        self.markdown_help_panel = QTextBrowser(self.help_panels_container)
-        self.markdown_help_panel.setHtml(self._markdown_help_html())
-        self.markdown_help_panel.hide()
-        self.markdown_help_panel.setMinimumHeight(180)
-        help_panels_layout.addWidget(self.markdown_help_panel)
+        self.functions_panel     = self.help_panels_container.functions_panel
+        self.markdown_help_panel = self.help_panels_container.markdown_help_panel
 
         help_container_row = QHBoxLayout()
         help_container_row.setContentsMargins(0, 0, 0, 0)
@@ -204,11 +240,16 @@ class NotebookTab(QWidget):
         self.columns_splitter.setChildrenCollapsible(False)
         self.columns_splitter.setSizes([840, 420])
 
+        self.graph_controller                         = GraphController(self.state, self.graph_state, self.graph_panel_widget)
+        self.execution_controller                     = self._build_execution_controller()
+        self.document_controller                      = self._build_document_controller()
+
         self.add_code_cell("left")
         self._refresh_completion_words()
         print("[debug][notebook-tab] init:done", flush=True)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        """Shut down notebook-side background services before closing the tab."""
         print("[debug][notebook-tab] close_event:start", flush=True)
         shutdown = getattr(self.lsp_client, "shutdown", None)
         if callable(shutdown):
@@ -216,23 +257,126 @@ class NotebookTab(QWidget):
         super().closeEvent(event)
         print("[debug][notebook-tab] close_event:done", flush=True)
 
+    @property
+    def cells(self) -> list[NotebookCellWidget]:
+        return self.state.cells
+
+    @property
+    def current_path(self) -> Path | None:
+        return self.state.current_path
+
+    @current_path.setter
+    def current_path(self, value: Path | None) -> None:
+        self.state.current_path = value
+
+    @property
+    def run_all_button(self):
+        return self.toolbar_widget.button("run_all_button")
+
+    @property
+    def restart_button(self):
+        return self.toolbar_widget.button("restart_button")
+
+    @property
+    def autosave_button(self):
+        return self.toolbar_widget.button("autosave_button")
+
+    @property
+    def save_button(self):
+        return self.toolbar_widget.button("save_button")
+
+    @property
+    def save_example_button(self):
+        return self.toolbar_widget.button("save_example_button")
+
+    @property
+    def open_button(self):
+        return self.toolbar_widget.button("open_button")
+
+    @property
+    def functions_toggle_button(self):
+        return self.toolbar_widget.button("functions_toggle_button")
+
+    @property
+    def markdown_toggle_button(self):
+        return self.toolbar_widget.button("markdown_toggle_button")
+
+    def _autosave_timeout(self) -> None:
+        print("[debug][notebook-tab] autosave_timeout", flush=True)
+        self.autosave_now(self.autosave_path)
+
+    def _handle_toolbar_autosave(self) -> None:
+        print("[debug][notebook-tab] handle_toolbar_autosave", flush=True)
+        self.autosave_now(self.autosave_path)
+
+    def _handle_sidebar_insert_example(self) -> None:
+        print("[debug][notebook-tab] handle_sidebar_insert_example", flush=True)
+        self.insert_example()
+
+    def _build_execution_controller(self) -> ExecutionController:
+        print("[debug][notebook-tab] build_execution_controller", flush=True)
+        return ExecutionController(
+            state                    = self.state,
+            execution_engine=self.execution_engine,
+            thread_pool=self.thread_pool,
+            done_timer=self._done_timer,
+            port                     = self.execution_adapter,
+            ui                       = self.ui_adapter,
+            graph_controller         = self.graph_controller,
+            ready_style              = _NB_STATUS_READY_SS,
+            muted_style              = _NB_STATUS_MUTED_SS,
+            info_style               = _NB_STATUS_INFO_SS,
+            error_style              = _NB_STATUS_ERROR_SS,
+        )
+
+    def _build_document_controller(self) -> DocumentController:
+        print("[debug][notebook-tab] build_document_controller", flush=True)
+        return DocumentController(
+            parent                   = self,
+            state                    = self.state,
+            storage                  = self.storage,
+            examples_dir             = self.examples_dir,
+            ui                       = self.ui_adapter,
+            port                     = self.document_adapter,
+            to_document              = self.to_document,
+            suggest_example_filename = suggest_example_filename,
+            muted_style              = _NB_STATUS_MUTED_SS,
+            ready_style              = _NB_STATUS_READY_SS,
+        )
+
+    def _set_status(self, text: str, style: str) -> None:
+        print(f"[debug][notebook-tab] set_status text={text!r}", flush=True)
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(style)
+
+    def _clear_cell_runtime(self, cell: NotebookCellWidget) -> None:
+        print(f"[debug][notebook-tab] clear_cell_runtime cell_id={cell.cell_id!r}", flush=True)
+        cell.clear_output()
+        if isinstance(cell.editor, NotebookCodeEditor):
+            cell.editor.apply_diagnostics([])
+            cell.editor.set_lsp_completions([])
+
     def _cell_count_label(self) -> str:
+        """Return a compact status label describing the current cell count."""
         count = len(self.cells)
         label = f"{count} cell{'s' if count != 1 else ''}"
         print(f"[debug][notebook-tab] cell_count_label label={label!r}", flush=True)
         return label
 
     def _code_cells(self) -> list[NotebookCellWidget]:
+        """Return only the code cells from the notebook cell list."""
         code_cells = [cell for cell in self.cells if cell.cell_type == "code"]
         print(f"[debug][notebook-tab] code_cells count={len(code_cells)}", flush=True)
         return code_cells
 
     def _document_uri_for_cell(self, cell_id: str) -> str:
+        """Build a stable pseudo-file URI for LSP-backed code editors."""
         uri = f"file:///desktop-notebook/{cell_id}.py"
         print(f"[debug][notebook-tab] document_uri_for_cell cell_id={cell_id!r} uri={uri!r}", flush=True)
         return uri
 
     def _completion_words(self) -> list[str]:
+        """Build editor completion words from the live execution namespace."""
         namespace = self.execution_engine.get_namespace()
         print(f"[debug][notebook-tab] completion_words_namespace count={len(namespace)}", flush=True)
         words = build_completion_words(namespace)
@@ -240,6 +384,7 @@ class NotebookTab(QWidget):
         return words
 
     def _refresh_completion_words(self) -> None:
+        """Push the latest completion word list into each code editor."""
         words = self._completion_words()
         for cell in self._code_cells():
             if isinstance(cell.editor, NotebookCodeEditor):
@@ -247,9 +392,11 @@ class NotebookTab(QWidget):
                 cell.editor.set_completion_words(words)
 
     def _handle_lsp_availability(self, available: bool) -> None:
+        """Log LSP availability changes for notebook editors."""
         print(f"[debug][notebook-tab] lsp_availability available={available}", flush=True)
 
     def _handle_lsp_completions(self, uri: str, labels: list[str]) -> None:
+        """Route asynchronous LSP completion results to the matching editor."""
         print(f"[debug][notebook-tab] handle_lsp_completions uri={uri!r} count={len(labels)}", flush=True)
         for cell in self._code_cells():
             if isinstance(cell.editor, NotebookCodeEditor) and cell.editor.document_uri == uri:
@@ -257,6 +404,7 @@ class NotebookTab(QWidget):
                 return
 
     def _handle_lsp_diagnostics(self, uri: str, diagnostics: list[dict[str, object]]) -> None:
+        """Route diagnostics from the LSP client to the matching code editor."""
         print(f"[debug][notebook-tab] handle_lsp_diagnostics uri={uri!r} count={len(diagnostics)}", flush=True)
         for cell in self._code_cells():
             if isinstance(cell.editor, NotebookCodeEditor) and cell.editor.document_uri == uri:
@@ -264,101 +412,45 @@ class NotebookTab(QWidget):
                 return
 
     def _build_sidebar(self) -> QWidget:
-        frame = QFrame(self)
-        frame.setFrameShape(QFrame.Shape.StyledPanel)
-        frame.setStyleSheet("QFrame { background:#ffffff; border:1px solid #d1dce8; }")
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
-        title = QLabel("Notebook Sidebar", frame)
-        title.setStyleSheet("color:#001f41; font-weight:700; font-size:22px;")
-        layout.addWidget(title)
-
-        self.example_preview = QTextBrowser(frame)
-        self.example_preview.setMinimumHeight(180)
-        self.example_preview.setMaximumHeight(220)
-        self.example_preview.setStyleSheet("font-size:15px; line-height:1.5;")
-        layout.addWidget(self.example_preview)
-
-        examples_label = QLabel("Examples", frame)
-        examples_label.setStyleSheet("color:#001f41; font-weight:600; font-size:18px;")
-        layout.addWidget(examples_label)
-        self.example_combo = AutoCloseComboBox(frame)
-        self.example_combo.setStyleSheet(
-            "QComboBox {"
-            " border:1px solid #d1dce8;"
-            " background:#ffffff;"
-            " font-size:15px;"
-            " padding:6px 8px;"
-            " min-height:32px;"
-            "} "
-            "QComboBox QAbstractItemView {"
-            " font-size:15px;"
-            " selection-background-color:#c7def5;"
-            " selection-color:#0f1b2b;"
-            " outline:0;"
-            "} "
-            "QComboBox QAbstractItemView::item:hover {"
-            " background:#c7def5;"
-            " color:#0f1b2b;"
-            "}"
+        """Build the examples and variables sidebar shown beside the notebook."""
+        print("[debug][notebook-tab] build_sidebar", flush=True)
+        self.sidebar_widget = SidebarWidget(
+            examples=self.examples,
+            combo_style=_NB_GRAPH_COMBO_SS,
+            text_style=_NB_TEXT_SS,
+            heading_style=_NB_HEADING_SS,
+            namespace_skip=self._namespace_skip,
+            summarize_value=self._summarize_namespace_value,
+            parent=self,
         )
-        for example in self.examples:
-            self.example_combo.addItem(example.title, example.id)
-        self.example_combo.currentIndexChanged.connect(self._update_example_preview)
-        layout.addWidget(self.example_combo)
-        if self.example_combo.count():
-            self.example_combo.setCurrentIndex(0)
-        self.insert_example_button = self._toolbar_button(
-            "Insert Example",
-            lambda: self.insert_example(),
-            "QPushButton { background:#001f41; color:white; border-radius:6px; padding:5px 12px; font-weight:600; } "
-            "QPushButton:hover { background:#0d3567; }",
-        )
-        layout.addWidget(self.insert_example_button)
-
-        self.variables_panel = self._build_variables_panel(frame)
-        layout.addWidget(self.variables_panel, 1)
-        layout.addStretch(1)
-        self._update_example_preview()
-        return frame
+        self.sidebar_widget.example_insert_requested.connect(self._handle_sidebar_insert_example)
+        self.example_preview       = self.sidebar_widget.example_preview
+        self.example_combo         = self.sidebar_widget.example_combo
+        self.insert_example_button = self.sidebar_widget.insert_example_button
+        self.variables_panel       = self.sidebar_widget.variables_panel
+        self.variables_browser     = self.sidebar_widget.variables_browser
+        return self.sidebar_widget
 
     def _update_example_preview(self) -> None:
-        if not hasattr(self, "example_combo"):
-            return
-        title = self.example_combo.currentText().strip()
-        example = next((item for item in self.examples if item.title == title), None)
-        if example is None:
-            return
-        print(f"[debug][notebook-tab] update_example_preview title={title!r}", flush=True)
-        tags = ", ".join(example.tags)
-        self.example_preview.setHtml(
-            f"<h3>{example.title}</h3>"
-            f"<p><b>Category:</b> {example.category or 'general'}</p>"
-            f"<p>{example.description}</p>"
-            f"<p><b>Tags:</b> {tags}</p>"
-        )
+        """Refresh the example preview panel for the currently selected example."""
+        if hasattr(self, "sidebar_widget"):
+            print("[debug][notebook-tab] update_example_preview delegate", flush=True)
+            self.sidebar_widget._update_example_preview()
 
     def _reload_examples_list(self, select_title: str | None = None) -> None:
+        """Reload example metadata from disk and optionally reselect one example."""
         print(f"[debug][notebook-tab] reload_examples_list select_title={select_title!r}", flush=True)
         self.examples = get_desktop_notebook_examples()
-        self.example_combo.blockSignals(True)
-        self.example_combo.clear()
-        selected_index = 0
-        for index, example in enumerate(self.examples):
-            self.example_combo.addItem(example.title, example.id)
-            if select_title and example.title == select_title:
-                selected_index = index
-        self.example_combo.blockSignals(False)
-        if self.example_combo.count():
-            self.example_combo.setCurrentIndex(selected_index)
-        self._update_example_preview()
+        if hasattr(self, "sidebar_widget"):
+            self.sidebar_widget.set_examples(self.examples, select_title)
 
     def _functions_reference_html(self) -> str:
+        """Return the HTML used in the notebook functions help panel."""
         print("[debug][notebook-tab] functions_reference delegate", flush=True)
         return build_functions_reference_html()
 
     def _markdown_help_html(self) -> str:
+        """Return the HTML used in the notebook markdown help panel."""
         print("[debug][notebook-tab] markdown_help_html", flush=True)
         html = (
             "<h3>Markdown Help</h3>"
@@ -375,223 +467,75 @@ class NotebookTab(QWidget):
         return html
 
     def toggle_functions_panel(self) -> None:
-        visible = not self.functions_panel.isVisible()
-        print(f"[debug][notebook-tab] toggle_functions visible={visible}", flush=True)
-        self.functions_panel.setVisible(visible)
+        """Show or hide the functions reference browser."""
+        print("[debug][notebook-tab] toggle_functions_panel delegate", flush=True)
+        self.help_panels_container.toggle_functions_panel()
 
     def toggle_markdown_help(self) -> None:
-        visible = not self.markdown_help_panel.isVisible()
-        print(f"[debug][notebook-tab] toggle_markdown_help visible={visible}", flush=True)
-        self.markdown_help_panel.setVisible(visible)
+        """Show or hide the markdown help browser."""
+        print("[debug][notebook-tab] toggle_markdown_help delegate", flush=True)
+        self.help_panels_container.toggle_markdown_help()
 
     def _build_column(self, column: str, title: str) -> tuple[QWidget, QVBoxLayout]:
-        wrapper = QWidget(self)
-        wrapper.setStyleSheet("background:#ffffff;")
-        wrapper_layout = QVBoxLayout(wrapper)
-        wrapper_layout.setContentsMargins(0, 0, 0, 0)
-        wrapper_layout.setSpacing(8)
-        header = QHBoxLayout()
-        label = QLabel(title, wrapper)
-        label.setStyleSheet("color:#001f41; font-weight:700; font-size:13px;")
-        header.addWidget(label)
-        header.addStretch(1)
-        add_code = self._toolbar_button(
-            "Add Code",
-            lambda checked=False, target=column: self.add_code_cell(target),
-            "QPushButton { background:#001f41; color:white; border-radius:6px; padding:4px 10px; font-weight:600; } "
-            "QPushButton:hover { background:#0d3567; }",
+        """Build the main notebook cell column container and its action header."""
+        print(f"[debug][notebook-tab] build_column column={column!r} title={title!r}", flush=True)
+        self.columns_widget = NotebookColumnsWidget(
+            heading_style=_NB_HEADING_SS,
+            parent=self,
         )
-        header.addWidget(add_code)
-        add_md = self._toolbar_button(
-            "Add Markdown",
-            lambda checked=False, target=column: self.add_markdown_cell(target),
-            "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:4px 10px; } "
-            "QPushButton:hover { background:#cbd5e1; }",
-        )
-        header.addWidget(add_md)
-        insert_example = self._toolbar_button(
-            "Insert Example",
-            lambda checked=False, target=column: self.insert_example(target),
-            "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:4px 10px; } "
-            "QPushButton:hover { background:#cbd5e1; }",
-        )
-        header.addWidget(insert_example)
-        wrapper_layout.addLayout(header)
-
-        container = QWidget(wrapper)
-        container.setStyleSheet("background:#ffffff;")
-        print(f"[debug][notebook-tab] build_column container_style column={column!r} background='#ffffff'", flush=True)
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-        layout.addStretch(1)
-        wrapper_layout.addWidget(container, 1)
-
-        self.left_container = container
-        return wrapper, layout
+        self.columns_widget.add_code_requested.connect(self.add_code_cell)
+        self.columns_widget.add_markdown_requested.connect(self.add_markdown_cell)
+        self.columns_widget.insert_example_requested.connect(self.insert_example)
+        self.left_container = self.columns_widget.container
+        return self.columns_widget, self.columns_widget.cells_layout
 
     def _build_variables_panel(self, parent: QWidget | None = None) -> QWidget:
-        wrapper = QWidget(parent or self)
-        wrapper_layout = QVBoxLayout(wrapper)
-        wrapper_layout.setContentsMargins(0, 6, 0, 0)
-        wrapper_layout.setSpacing(8)
-        variables_header = QHBoxLayout()
-        variables_label = QLabel("Variables", wrapper)
-        variables_label.setStyleSheet("color:#001f41; font-weight:700; font-size:15px;")
-        variables_header.addWidget(variables_label)
-        variables_header.addStretch(1)
-        wrapper_layout.addLayout(variables_header)
-
-        self.variables_browser = QTextBrowser(wrapper)
-        self.variables_browser.setMinimumHeight(360)
-        self.variables_browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.variables_browser.setStyleSheet(
-            "QTextBrowser {"
-            " border:1px solid #d1dce8;"
-            " background:#ffffff;"
-            " font-size:14px;"
-            "}"
-        )
-        self.variables_browser.document().setDocumentMargin(8)
-        wrapper_layout.addWidget(self.variables_browser, 1)
-        self._refresh_variables_panel()
-        return wrapper
+        """Build the sidebar panel that displays live namespace variables."""
+        print("[debug][notebook-tab] build_variables_panel delegate", flush=True)
+        return self.sidebar_widget.variables_panel
 
     def _build_graphs_panel(self) -> QWidget:
-        print("[debug][notebook-tab] build_graphs_panel:quick_preview_panel", flush=True)
-        self.quick_preview_panel = QuickGraphPreviewPanel(self)
-        return self.quick_preview_panel
+        """Build the notebook-side graph preview panel."""
+        print("[debug][notebook-tab] build_graphs_panel:graph_panel_widget", flush=True)
+        self.graph_panel_widget = GraphPanelWidget(self)
+        self.quick_preview_panel = self.graph_panel_widget.quick_preview_panel
+        return self.graph_panel_widget
 
     def _summarize_namespace_value(self, value: object) -> tuple[str, str]:
-        if isinstance(value, np.ndarray):
-            shape = value.shape
-            summary = f"shape={shape}"
-            if value.ndim == 1:
-                summary += f" len={value.size}"
-            return summary, "ndarray"
-        if isinstance(value, pd.DataFrame):
-            return f"DataFrame shape={value.shape}", "DataFrame"
-        if isinstance(value, (list, tuple)):
-            if len(value) <= 6 and all(not isinstance(item, (list, tuple, dict)) for item in value):
-                return repr(value), type(value).__name__
-            return f"{type(value).__name__} len={len(value)}", type(value).__name__
-        if isinstance(value, dict):
-            keys = list(value.keys())
-            if len(keys) <= 4:
-                preview = ", ".join(str(key) for key in keys)
-                return "{" + preview + "}", "dict"
-            return f"dict keys={len(keys)}", "dict"
-        if isinstance(value, str):
-            return (value if len(value) <= 40 else value[:37] + "..."), "str"
-        if isinstance(value, (int, float, complex, bool)):
-            return str(value), type(value).__name__
-        if isinstance(value, go.Figure):
-            return "Plotly Figure", "plot"
-        return type(value).__name__, type(value).__name__
+        """Convert one namespace value into a compact sidebar summary and type name."""
+        return summarize_namespace_value(value)
 
     def _refresh_variables_panel(self) -> None:
+        """Rebuild the variables sidebar from the current execution namespace."""
         print("[debug][notebook-tab] refresh_variables_panel", flush=True)
         namespace = self.execution_engine.get_namespace()
-        print(f"[debug][notebook-tab] refresh_variables_panel_namespace count={len(namespace)}", flush=True)
-        rows: list[tuple[str, str, str]] = []
-        for name, value in sorted(namespace.items()):
-            if name in self._namespace_skip or name.startswith("_"):
-                continue
-            if isinstance(value, ModuleType) or callable(value):
-                continue
-            summary, type_name = self._summarize_namespace_value(value)
-            rows.append((name, summary, type_name))
-        print(f"[debug][notebook-tab] refresh_variables_panel rows={len(rows)}", flush=True)
-        if not rows:
-            self.variables_browser.setHtml("<p style='color:#64748b; font-style:italic;'>Run code to see variables here.</p>")
-            return
-        table_rows = "".join(
-            "<tr>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #e2e8f0;'><code>{html.escape(name)}</code></td>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #e2e8f0;'>{html.escape(summary)}</td>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #e2e8f0; color:#64748b;'>{html.escape(type_name)}</td>"
-            "</tr>"
-            for name, summary, type_name in rows
-        )
-        self.variables_browser.setHtml(
-            "<table style='width:100%; border-collapse:collapse;'>"
-            "<thead>"
-            "<tr>"
-            "<th style='text-align:left; padding:6px 8px; border-bottom:2px solid #d1dce8;'>Variable</th>"
-            "<th style='text-align:left; padding:6px 8px; border-bottom:2px solid #d1dce8;'>Value</th>"
-            "<th style='text-align:left; padding:6px 8px; border-bottom:2px solid #d1dce8;'>Type</th>"
-            "</tr>"
-            "</thead>"
-            f"<tbody>{table_rows}</tbody></table>"
-        )
+        self.sidebar_widget._refresh_variables_panel(namespace)
 
     def _rebuild_columns(self) -> None:
+        """Re-render notebook cells into the visible column layout."""
         print(f"[debug][notebook-tab] rebuild_columns count={len(self.cells)}", flush=True)
-        while self.left_cells_layout.count():
-            item = self.left_cells_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
         for cell in self.cells:
             cell.set_column("left")
             cell.move_left_btn.hide()
             cell.move_right_btn.hide()
-            self.left_cells_layout.addWidget(cell)
-        self.left_cells_layout.addStretch(1)
+        self.columns_widget.rebuild_cells(self.cells)
         self._refresh_variables_panel()
         self._refresh_graphs_panel()
 
     def _refresh_graphs_panel(self) -> None:
-        print("[debug][notebook-tab] refresh_graphs_panel", flush=True)
-        namespace = self.execution_engine.get_namespace()
-        print(f"[debug][notebook-tab] refresh_graphs_panel_namespace count={len(namespace)}", flush=True)
-        self.graph_state.set_namespace(namespace)
-        self.quick_preview_panel.set_namespace(namespace)
-        title, html = self._latest_plot_output()
-        if html:
-            self.graph_state.set_latest_plot(title, html)
-        else:
-            self.graph_state.clear_latest_plot()
-        self.quick_preview_panel.set_latest_plot(title, html)
+        """Push namespace and latest-plot state into graph consumers."""
+        self.graph_controller.refresh_graphs_panel(self.execution_engine.get_namespace())
 
     def _latest_plot_output(self) -> tuple[str, str]:
-        print("[debug][notebook-tab] latest_plot_output:start", flush=True)
-        latest_title = ""
-        latest_html = ""
-        for cell in self.cells:
-            result = getattr(cell, "last_result", None)
-            if result is None:
-                continue
-            for output in result.outputs:
-                if output.kind == "plotly":
-                    latest_title = self._graph_title_for_cell(cell)
-                    latest_html = output.data.get("html", "")
-                    print(
-                        f"[debug][notebook-tab] latest_plot_output:plotly title={latest_title!r} html_length={len(latest_html)}",
-                        flush=True,
-                    )
-                elif output.kind == "html" and "data:image" in output.data.get("html", ""):
-                    latest_title = self._graph_title_for_cell(cell)
-                    latest_html = output.data.get("html", "")
-                    print(
-                        f"[debug][notebook-tab] latest_plot_output:image title={latest_title!r} html_length={len(latest_html)}",
-                        flush=True,
-                    )
-        print(
-            f"[debug][notebook-tab] latest_plot_output:done title={latest_title!r} html_length={len(latest_html)}",
-            flush=True,
-        )
-        return latest_title, latest_html
+        """Find the latest graph-like output produced by any notebook cell."""
+        return self.graph_controller.latest_plot_output()
 
     def _graph_title_for_cell(self, cell: NotebookCellWidget) -> str:
-        source_lines = [line.strip() for line in cell.source().splitlines() if line.strip()]
-        title = source_lines[0] if source_lines else getattr(cell, "cell_id", "plot")
-        if len(title) > 48:
-            title = title[:45] + "..."
-        print(f"[debug][notebook-tab] graph_title title={title!r}", flush=True)
-        return title
+        """Build a readable graph title from a cell's source code."""
+        return self.graph_controller._graph_title_for_cell(cell)
 
     def _apply_layout_state(self, left_column_width_pct: int) -> None:
+        """Restore the notebook/graph splitter ratio from saved layout state."""
         total = max(1, self.columns_splitter.width() or 1000)
         left = max(320, int(total * left_column_width_pct / 100.0))
         right = max(320, total - left)
@@ -601,28 +545,41 @@ class NotebookTab(QWidget):
         )
         self.columns_splitter.setSizes([left, right])
 
-    def _toolbar_button(self, label: str, handler: object, style: str) -> QPushButton:
-        print(f"[debug][notebook-tab] toolbar_button label={label!r}", flush=True)
-        button = QPushButton(label, self)
-        button.setStyleSheet(style)
-        button.clicked.connect(handler)
-        return button
+    def _build_toolbar(self) -> NotebookToolbar:
+        """Build the notebook toolbar with left controls, right controls, and status."""
+        print("[debug][notebook-tab] build_toolbar start", flush=True)
+        toolbar = NotebookToolbar(status_style=_NB_STATUS_READY_SS, parent=self)
+        toolbar.run_all_requested.      connect(self.run_all_cells)
+        toolbar.restart_requested.      connect(self.restart_kernel)
+        toolbar.autosave_requested.     connect(self._handle_toolbar_autosave)
+        toolbar.save_requested.         connect(self.save_document)
+        toolbar.save_example_requested. connect(self.save_example_document)
+        toolbar.open_requested.         connect(self.open_document)
+        toolbar.functions_requested.    connect(self.toggle_functions_panel)
+        toolbar.markdown_help_requested.connect(self.toggle_markdown_help)
+
+        self.status_label = toolbar.status_label
+        print("[debug][notebook-tab] build_toolbar done", flush=True)
+        return toolbar
 
     def _set_ready_status(self) -> None:
+        """Restore the ready status appearance after transient status messages."""
         print("[debug][notebook-tab] status:ready", flush=True)
         self.status_label.setText("Ready")
-        self.status_label.setStyleSheet("color: #15803d; font-weight: 600;")
+        self.status_label.setStyleSheet(_NB_STATUS_READY_SS)
 
     def _insert_cell(self, cell: NotebookCellWidget) -> None:
+        """Insert one cell into notebook state and connect autosave tracking."""
         self.cells.append(cell)
         self._rebuild_columns()
         cell.editor.textChanged.connect(self.schedule_autosave)
-        if self._is_loading_document:
+        if self.state.is_loading_document:
             return
         self.status_label.setText(self._cell_count_label())
-        self.status_label.setStyleSheet("color: #64748b; font-weight: 600;")
+        self.status_label.setStyleSheet(_NB_STATUS_MUTED_SS)
 
     def _create_cell(self, cell_type: str, source: str = "", column: str = "left") -> NotebookCellWidget:
+        """Create a configured notebook cell widget for code or markdown."""
         temp_cell_id = f"cell-{uuid.uuid4().hex[:8]}"
         document_uri = self._document_uri_for_cell(temp_cell_id) if cell_type == "code" else ""
         words = self._completion_words() if cell_type == "code" else None
@@ -649,14 +606,17 @@ class NotebookTab(QWidget):
         return cell
 
     def add_code_cell(self, column: str = "left", source: str = "") -> None:
+        """Append a new code cell to the notebook."""
         print(f"[debug][notebook-tab] add_code_cell column={column!r}", flush=True)
         self._insert_cell(self._create_cell("code", source, column))
 
     def add_markdown_cell(self, column: str = "left", source: str = "") -> None:
+        """Append a new markdown cell to the notebook."""
         print(f"[debug][notebook-tab] add_markdown_cell column={column!r}", flush=True)
         self._insert_cell(self._create_cell("markdown", source, column))
 
     def insert_example(self, column: str = "left") -> None:
+        """Insert all cells from the currently selected example notebook."""
         title = self.example_combo.currentText().strip() if hasattr(self, "example_combo") else ""
         example = next((item for item in self.examples if item.title == title), None)
         print(f"[debug][notebook-tab] insert_example title={title!r} column={column!r}", flush=True)
@@ -679,6 +639,7 @@ class NotebookTab(QWidget):
         self.schedule_autosave()
 
     def delete_cell(self, cell: NotebookCellWidget) -> None:
+        """Remove a cell from the notebook and refresh dependent UI."""
         print(f"[debug][notebook-tab] delete_cell cell_id={cell.cell_id!r}", flush=True)
         if cell in self.cells:
             self.cells.remove(cell)
@@ -687,9 +648,10 @@ class NotebookTab(QWidget):
         self._rebuild_columns()
         self.schedule_autosave()
         self.status_label.setText(self._cell_count_label())
-        self.status_label.setStyleSheet("color: #64748b; font-weight: 600;")
+        self.status_label.setStyleSheet(_NB_STATUS_MUTED_SS)
 
     def move_cell(self, cell: NotebookCellWidget, direction: int) -> None:
+        """Move a cell forward or backward in the notebook order."""
         if cell not in self.cells:
             return
         old_index = self.cells.index(cell)
@@ -707,80 +669,32 @@ class NotebookTab(QWidget):
         self.schedule_autosave()
 
     def move_cell_to_column(self, cell: NotebookCellWidget, column: str) -> None:
+        """Handle column-move requests for notebook cells."""
         if cell not in self.cells or column != "left":
             return
 
     def run_cell(self, cell: NotebookCellWidget) -> None:
-        print(f"[debug][notebook-tab] run_cell cell_id={cell.cell_id!r}", flush=True)
-        if self._is_running and not self._run_all_queue:
-            self.status_label.setText("Execution already running")
-            self.status_label.setStyleSheet("color: #b60021; font-weight: 600;")
-            return
-        self.status_label.setText("Running cell...")
-        self.status_label.setStyleSheet("color: #2563eb; font-weight: 600;")
-        self._is_running = True
-        worker = ExecutionWorker(self.execution_engine, cell.source())
-        self._active_workers.add(worker)
-        worker.signals.finished.connect(
-            lambda result, target=cell, current_worker=worker: self._handle_worker_finished(current_worker, target, result)
-        )
-        self.thread_pool.start(worker)
+        """Execute one code cell asynchronously through an execution worker."""
+        self.execution_controller.run_cell(cell)
 
     def _handle_worker_finished(self, worker: ExecutionWorker, cell: NotebookCellWidget, result: ExecutionResult) -> None:
-        print(f"[debug][notebook-tab] handle_worker_finished cell_id={cell.cell_id!r}", flush=True)
-        self._active_workers.discard(worker)
-        self._handle_cell_result(cell, result)
+        """Finalize one background execution worker and process its result."""
+        self.execution_controller._handle_worker_finished(worker, cell, result)
 
     def _handle_cell_result(self, cell: NotebookCellWidget, result: ExecutionResult) -> None:
-        print(f"[debug][notebook-tab] handle_cell_result cell_id={cell.cell_id!r}", flush=True)
-        cell.set_result(result)
-        self._refresh_completion_words()
-        self._refresh_variables_panel()
-        self._refresh_graphs_panel()
-        self._is_running = False
-        if result.error:
-            self._run_all_queue.clear()
-            self.status_label.setText("Execution error")
-            self.status_label.setStyleSheet("color: #b60021; font-weight: 600;")
-        elif self._run_all_queue:
-            next_cell = self._run_all_queue.pop(0)
-            self.run_cell(next_cell)
-            return
-        else:
-            self.status_label.setText("Done")
-            self.status_label.setStyleSheet("color: #15803d; font-weight: 600;")
-            self._done_timer.start()
-        self.schedule_autosave()
+        """Apply one execution result and refresh all namespace-driven views."""
+        self.execution_controller._handle_cell_result(cell, result)
 
     def run_all_cells(self) -> None:
-        print(f"[debug][notebook-tab] run_all_cells count={len(self.cells)}", flush=True)
-        code_cells = [cell for cell in self.cells if cell.cell_type == "code"]
-        if not code_cells:
-            self.status_label.setText("No code cells")
-            self.status_label.setStyleSheet("color: #64748b; font-weight: 600;")
-            return
-        self._run_all_queue = code_cells[1:]
-        self.run_cell(code_cells[0])
+        """Queue every code cell and execute them from top to bottom."""
+        self.execution_controller.run_all_cells()
 
     def restart_kernel(self) -> None:
-        print("[debug][notebook-tab] restart_kernel", flush=True)
-        self._done_timer.stop()
-        self._run_all_queue.clear()
-        self._is_running = False
-        restarted_now = self.execution_engine.restart()
-        for cell in self.cells:
-            cell.clear_output()
-            if isinstance(cell.editor, NotebookCodeEditor):
-                cell.editor.apply_diagnostics([])
-                cell.editor.set_lsp_completions([])
-        self._refresh_completion_words()
-        self._refresh_variables_panel()
-        self._refresh_graphs_panel()
-        self.status_label.setText("Kernel restarted" if restarted_now else "Kernel restart pending")
-        self.status_label.setStyleSheet("color: #15803d; font-weight: 600;" if restarted_now else "color: #2563eb; font-weight: 600;")
-        self.schedule_autosave()
+        """Reset the execution namespace and clear cell outputs."""
+        self.execution_controller.restart_kernel()
 
     def to_document(self) -> NotebookDocument:
+        """Serialize the current notebook UI state into a saveable document."""
         cells = []
         for cell in self.cells:
             outputs = []
@@ -808,6 +722,7 @@ class NotebookTab(QWidget):
         )
 
     def _current_left_column_pct(self) -> int:
+        """Return the current notebook-column width as a percentage."""
         sizes = self.columns_splitter.sizes()
         if len(sizes) < 2:
             return 50
@@ -817,91 +732,34 @@ class NotebookTab(QWidget):
         return pct
 
     def load_document(self, document: NotebookDocument) -> None:
-        print(f"[debug][notebook-tab] load_document count={len(document.cells)}", flush=True)
-        self._is_loading_document = True
-        for cell in list(self.cells):
-            self.delete_cell(cell)
-        if not document.cells:
-            self._is_loading_document = False
-            self.add_code_cell()
-            return
-        try:
-            for payload in document.cells:
-                cell = self._create_cell(
-                    payload.get("type", "code"),
-                    payload.get("source", ""),
-                    payload.get("column", "left"),
-                )
-                cell.panel_width = payload.get("panel_width")
-                self._insert_cell(cell)
-                if payload.get("outputs"):
-                    restored = ExecutionResult(
-                        outputs=[ExecutionOutput(kind=output.get("kind", "value"), data=dict(output.get("data") or {})) for output in payload.get("outputs", [])],
-                        error=None,
-                    )
-                    cell.set_result(restored)
-        finally:
-            self._is_loading_document = False
-        self._rebuild_columns()
-        self._refresh_completion_words()
-        self.status_label.setText(self._cell_count_label())
-        self.status_label.setStyleSheet("color: #64748b; font-weight: 600;")
-        QTimer.singleShot(0, lambda: self._apply_layout_state(int(document.layout.get("left_column_width_pct", 50))))
-        self.schedule_autosave()
+        """Rebuild the notebook UI from a previously saved document."""
+        self.document_controller.load_document(document)
 
     def save_document(self) -> None:
-        default_path = self.current_path or (self.examples_dir / "desktop_notebook.json")
-        path, _ = QFileDialog.getSaveFileName(self, "Save Notebook", str(default_path), "JSON Files (*.json)")
-        if not path:
-            return
-        print(f"[debug][notebook-tab] save_document path={path!r}", flush=True)
-        self.current_path = Path(path)
-        document = self.to_document()
-        document.metadata["title"] = self.current_path.stem.replace("_", " ").strip() or "Desktop Notebook"
-        self.storage.save(self.current_path, document)
-        if self.current_path.parent == self.examples_dir:
-            self._reload_examples_list(select_title=document.metadata["title"])
-        self.status_label.setText(f"Saved {self.current_path.name}")
-        self.status_label.setStyleSheet("color: #15803d; font-weight: 600;")
+        """Save the current notebook to a user-selected JSON file."""
+        self.document_controller.save_document()
 
     def save_example_document(self) -> None:
-        title_seed = self.current_path.stem if self.current_path is not None else "desktop_notebook"
-        default_path = self.examples_dir / suggest_example_filename(title_seed)
-        path, _ = QFileDialog.getSaveFileName(self, "Save Notebook Example", str(default_path), "JSON Files (*.json)")
-        if not path:
-            return
-        print(f"[debug][notebook-tab] save_example_document path={path!r}", flush=True)
-        self.current_path = Path(path)
-        document = self.to_document()
-        document.metadata["title"] = self.current_path.stem.replace("_", " ").strip() or "Desktop Notebook"
-        document.metadata.setdefault("category", "custom")
-        document.metadata.setdefault("description", "Saved from the desktop notebook.")
-        document.metadata.setdefault("tags", ["saved", "desktop"])
-        self.storage.save(self.current_path, document)
-        self._reload_examples_list(select_title=document.metadata["title"])
-        self.status_label.setText(f"Saved example {self.current_path.name}")
-        self.status_label.setStyleSheet("color: #15803d; font-weight: 600;")
+        """Save the current notebook as a reusable example entry."""
+        self.document_controller.save_example_document(suggest_example_filename)
 
     def open_document(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Open Notebook", "", "JSON Files (*.json)")
-        if not path:
+        """Open a notebook JSON file and load it into the current tab."""
+        document = self.document_controller.open_document()
+        if document is None:
             return
-        print(f"[debug][notebook-tab] open_document path={path!r}", flush=True)
-        self.current_path = Path(path)
-        self.load_document(self.storage.load(self.current_path))
-        self.status_label.setText(f"Opened {self.current_path.name}")
-        self.status_label.setStyleSheet("color: #15803d; font-weight: 600;")
+        current_path = self.current_path
+        self.load_document(document)
+        if current_path is not None:
+            self._set_status(f"Opened {current_path.name}", _NB_STATUS_READY_SS)
 
     def schedule_autosave(self) -> None:
+        """Restart the autosave timer after an editing change."""
         self.autosave_timer.start()
 
     def autosave_now(self, path: str | Path) -> None:
-        if self._is_running:
+        """Persist an autosave snapshot immediately when execution is idle."""
+        if self.state.execution.is_running:
             self.autosave_timer.start()
             return
-        target = Path(path)
-        self._done_timer.stop()
-        print(f"[debug][notebook-tab] autosave_now path={str(target)!r}", flush=True)
-        self.storage.save(target, self.to_document())
-        self.status_label.setText(f"Autosaved {target.name}")
-        self.status_label.setStyleSheet("color: #64748b; font-weight: 600;")
+        self.document_controller.autosave_now(path, self._done_timer)

@@ -85,19 +85,31 @@ MARKER_SIZE_OPTIONS = (4, 6, 8, 10, 12, 14, 16, 18, 20)
 GRAPH_SIZE_OPTIONS = (
     ("800 × 700", (800, 700)),
     ("800 × 600", (800, 600)),
+    ("Square", (700, 700)),
     ("700 × 700", (700, 700)),
 )
 
 _CARD_STYLE = """
-    QWidget#graphCard { background:#ffffff; border:1px solid #d1dce8; }
+    QWidget#graphCard { background:#f8fbfe; border:1px solid #d7e2ec; border-radius:12px; }
     QWidget#graphCard QLabel { background:transparent; border:none; }
     QWidget#graphCard QComboBox,
     QWidget#graphCard QLineEdit,
-    QWidget#graphCard QListWidget {
+    QWidget#graphCard QListWidget,
+    QWidget#graphCard QSpinBox {
         background:#ffffff; border:1px solid #d1dce8;
-        border-radius:6px; padding:4px 6px;
+        border-radius:8px; padding:5px 8px; font-size:12px; font-weight:400; color:#0f1b2b;
     }
     QWidget#graphCard QListView { background:#ffffff; border:1px solid #d1dce8; }
+    QWidget#graphCard QWidget#graphSection,
+    QWidget#graphCard QWidget#graphPreviewCard {
+        background:#ffffff;
+        border:1px solid #d7e2ec;
+        border-radius:10px;
+    }
+    QWidget#graphCard QRadioButton,
+    QWidget#graphCard QPushButton {
+        font-size:12px; font-weight:400;
+    }
     QWidget#graphCard QComboBox QAbstractItemView {
         selection-background-color:#c7def5; selection-color:#0f1b2b; outline:0;
     }
@@ -105,19 +117,23 @@ _CARD_STYLE = """
         background:#c7def5; color:#0f1b2b;
     }
 """
-_LBL_SS   = "color:#355070; font-weight:600; font-size:12px;"
-_TITLE_SS = "color:#001f41; font-weight:700; font-size:13px;"
+_TEXT_SS  = "color:#355070; font-weight:400; font-size:12px;"
+_LBL_SS   = "color:#355070; font-weight:700; font-size:12px;"
+_TITLE_SS = "color:#001f41; font-weight:700; font-size:14px;"
+_SECTION_TITLE_SS = _LBL_SS
+_MUTED_SS = "color:#64748b; font-weight:400; font-size:12px;"
 _CB_SS = (
-    "QCheckBox { color:#355070; font-weight:600; font-size:12px; }"
-    "QCheckBox::indicator { width:13px; height:13px; border:1.5px solid #000;"
+    "QCheckBox { color:#355070; font-weight:400; font-size:12px; }"
+    "QCheckBox::indicator { width:13px; height:13px; border:1.5px solid #1d4ed8;"
     " border-radius:3px; background:#fff; }"
-    "QCheckBox::indicator:checked { border:1.5px solid #000; background:#d8b4fe; }"
+    "QCheckBox::indicator:checked { border:1.5px solid #1d4ed8; background:#bfdbfe; }"
 )
 
 
 # ── Scientific layout helpers (pure functions) ───────────────────────────────
 
 def _default_style() -> dict[str, Any]:
+    """Return the base scientific plotting style used across graph widgets."""
     return {
         "font_size": 16, "line_width": 2, "marker_size": 7,
         "show_grid": True, "show_box": True,
@@ -127,6 +143,7 @@ def _default_style() -> dict[str, Any]:
 
 
 def _axis_opts(style: dict[str, Any], axis_title: str) -> dict[str, Any]:
+    """Build one Plotly axis configuration from the active style settings."""
     fs = int(style.get("font_size", 16))
     td = "inside" if style.get("ticks_inside", True) else "outside"
     return {
@@ -152,6 +169,7 @@ def _apply_layout(
     x_title: str, y_title: str, showlegend: bool,
     style: dict[str, Any] | None = None, barmode: str | None = None,
 ) -> None:
+    """Apply shared scientific layout options to a Plotly figure in-place."""
     s = dict(_default_style())
     if style:
         s.update(style)
@@ -172,6 +190,7 @@ def _apply_layout(
 # ── Array extraction (pure functions) ───────────────────────────────────────
 
 def _to_1d(value: Any) -> np.ndarray | None:
+    """Normalize a numeric list or array into a 1D float numpy array."""
     arr = np.asarray(value) if isinstance(value, (list, tuple)) else \
           value if isinstance(value, np.ndarray) else None
     if arr is None or arr.ndim != 1 or not np.issubdtype(arr.dtype, np.number):
@@ -180,6 +199,7 @@ def _to_1d(value: Any) -> np.ndarray | None:
 
 
 def _to_2d(value: Any) -> np.ndarray | None:
+    """Normalize a numeric list or array into a 2D float numpy array."""
     arr = np.asarray(value) if isinstance(value, (list, tuple)) else \
           value if isinstance(value, np.ndarray) else None
     if arr is None or arr.ndim != 2 or not np.issubdtype(arr.dtype, np.number):
@@ -190,6 +210,7 @@ def _to_2d(value: Any) -> np.ndarray | None:
 def extract_notebook_array_variables(
     namespace: dict[str, Any],
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+    """Extract numeric 1D and 2D arrays from a notebook execution namespace."""
     from types import ModuleType
     arrays_1d: dict[str, np.ndarray] = {}
     arrays_2d: dict[str, np.ndarray] = {}
@@ -214,11 +235,15 @@ def build_notebook_plot_figure(
     title: str, x_title: str, y_title: str,
     series_styles: dict[str, dict[str, str]] | None = None,
     style: dict[str, Any] | None = None,
+    style_options: dict[str, Any] | None = None,
 ) -> go.Figure:
+    """Build a standard 1D notebook figure from selected x/y arrays and styles."""
     fig = go.Figure()
     s = dict(_default_style())
     if style:
         s.update(style)
+    if style_options:
+        s.update(style_options)
     lw = int(s.get("line_width", 2))
     ms = int(s.get("marker_size", 7))
     fs = int(s.get("font_size", 16))
@@ -262,6 +287,7 @@ def build_notebook_evolution_figure(
     title: str, x_title: str, y_title: str,
     style: dict[str, Any] | None = None,
 ) -> go.Figure:
+    """Build a figure showing one time-step slice from a 2D evolution matrix."""
     fig = go.Figure()
     s = dict(_default_style())
     if style:
@@ -288,8 +314,8 @@ def build_notebook_evolution_figure(
         fig.add_trace(go.Bar(x=v_axis, y=y_data, name=tname, marker_color="#1f77b4"))
     else:
         fig.add_trace(go.Scatter(x=v_axis, y=y_data, name=tname,
-                                 mode=plot_type if plot_type != "histogram" else "lines",
-                                 line={"color": "#1f77b4", "width": lw},
+                                 mode  =plot_type if plot_type != "histogram" else "lines",
+                                 line  ={"color": "#1f77b4", "width": lw},
                                  marker={"color": "#1f77b4", "size": ms}))
     _apply_layout(fig,
                   title=title or f"{matrix_var or '2D array'} @ t={t_val}",
@@ -305,17 +331,20 @@ class NamespaceConsumerMixin:
     """Shared helpers for namespace management and combo selection preservation."""
 
     def _init_namespace_state(self) -> None:
+        """Initialize cached 1D and 2D array dictionaries for a graph consumer."""
         self._nb_arrays_1d: dict[str, np.ndarray] = {}
         self._nb_arrays_2d: dict[str, np.ndarray] = {}
 
     @staticmethod
     def _restore_selection(combo: AutoCloseComboBox | CheckableComboBox, previous: Any) -> None:
+        """Restore a combo-box selection if the previous value is still present."""
         idx = combo.findData(previous)
         if idx >= 0:
             combo.setCurrentIndex(idx)
 
     @staticmethod
     def _restore_multi_selection(combo: CheckableComboBox, previous: set[str]) -> None:
+        """Restore a multi-select combo selection from a previous checked-value set."""
         if previous:
             combo.set_checked_values(list(previous & {combo.itemData(i)
                                                        for i in range(combo.count())}))
@@ -331,6 +360,7 @@ class DataSourceWidget(QWidget):
     changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Build the notebook-vs-CSV data source selector UI."""
         super().__init__(parent)
         self._notebook_arrays: dict[str, np.ndarray] = {}
         self._csv_arrays: dict[str, np.ndarray] = {}
@@ -339,17 +369,19 @@ class DataSourceWidget(QWidget):
         # not to child radio buttons or buttons (avoids invisible-widget bug)
         self.setObjectName("dataSourceBox")
         self.setStyleSheet(
-            "#dataSourceBox { background:#f0f4f8; border:1px solid #cdd8e3;"
-            " border-radius:4px; }"
+            "#dataSourceBox { background:transparent; border:none; }"
+            "#dataSourceBox QRadioButton { " + _TEXT_SS + " }"
+            "#dataSourceBox QLabel#dataSourcePath { " + _MUTED_SS + " }"
+            "#dataSourceBox QPushButton { border:1px solid #93c5fd; border-radius:4px;"
+            " padding:3px 10px; font-size:12px; font-weight:400;"
+            " background:#eff6ff; color:#1d4ed8; }"
+            "#dataSourceBox QPushButton:hover { background:#dbeafe; }"
         )
+        print("[debug][data-source-widget] init shared_font applied=True", flush=True)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(6)
-
-        src_lbl = QLabel("Data source", self)
-        src_lbl.setStyleSheet("color:#355070; font-weight:700; font-size:12px;")
-        root.addWidget(src_lbl)
 
         radio_row = QHBoxLayout()
         radio_row.setSpacing(16)
@@ -371,13 +403,8 @@ class DataSourceWidget(QWidget):
         cr.setContentsMargins(0, 0, 0, 0)
         cr.setSpacing(8)
         self._path_label = QLabel("No file selected", self._csv_row)
-        self._path_label.setStyleSheet("color:#64748b; font-size:11px;")
+        self._path_label.setObjectName("dataSourcePath")
         self._open_btn = QPushButton("Open file…", self._csv_row)
-        self._open_btn.setStyleSheet(
-            "QPushButton { border:1px solid #93c5fd; border-radius:4px;"
-            " padding:3px 10px; font-size:12px; background:#eff6ff; color:#1d4ed8; }"
-            "QPushButton:hover { background:#dbeafe; }"
-        )
         self._open_btn.clicked.connect(self._open_file)
         cr.addWidget(self._path_label, 1)
         cr.addWidget(self._open_btn)
@@ -389,12 +416,15 @@ class DataSourceWidget(QWidget):
     # ── public ───────────────────────────────────────────────────────
 
     def active_arrays_1d(self) -> dict[str, np.ndarray]:
+        """Return the 1D arrays from the currently active data source."""
         return self._csv_arrays if self._csv_radio.isChecked() else self._notebook_arrays
 
     def is_csv(self) -> bool:
+        """Return whether the widget is currently using CSV-backed data."""
         return self._csv_radio.isChecked()
 
     def update_notebook_arrays(self, arrays: dict[str, np.ndarray]) -> None:
+        """Refresh the notebook-backed array cache and emit when active."""
         self._notebook_arrays = arrays
         if not self._csv_radio.isChecked():
             self.changed.emit()
@@ -402,12 +432,14 @@ class DataSourceWidget(QWidget):
     # ── private ──────────────────────────────────────────────────────
 
     def _on_toggle(self, _btn: Any, checked: bool) -> None:
+        """Swap visible controls when the active data source changes."""
         if not checked:
             return
         self._csv_row.setVisible(self._csv_radio.isChecked())
         self.changed.emit()
 
     def _open_file(self) -> None:
+        """Load numeric columns from a CSV/text file into the active graph source."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Open data file", "",
             "Data files (*.csv *.txt *.dat *.tsv);;All files (*)",
@@ -436,8 +468,11 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
     changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Build the mode-specific axis and variable selection controls."""
         super().__init__(parent)
         self._init_namespace_state()
+        self._arrays_2d: dict[str, np.ndarray] = {}
+        self.setStyleSheet("QLabel { " + _LBL_SS + " }")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
@@ -522,6 +557,8 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         arrays_1d: dict[str, np.ndarray],
         arrays_2d: dict[str, np.ndarray],
     ) -> None:
+        """Rebuild selector combos from the current 1D and 2D array sets."""
+        self._arrays_2d = dict(arrays_2d)
         prev_x      = self.x_combo.currentData()
         prev_y      = set(self.selected_y_vars())
         prev_matrix = self.evo_matrix_combo.currentData()
@@ -569,19 +606,24 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         self._on_matrix_changed()
 
     def mode(self) -> str:
+        """Return the current graph mode: `series` or `evolution`."""
         return self.mode_combo.currentData() or "series"
 
     def selected_x(self) -> str | None:
+        """Return the selected x-variable name for 1D plotting."""
         v = self.x_combo.currentData()
         return v if v else None
 
     def selected_y_vars(self) -> list[str]:
+        """Return the selected y-variable names for 1D plotting."""
         return [v for v in self.y_combo.checked_values() if isinstance(v, str)]
 
     def plot_type(self) -> str:
+        """Return the currently selected Plotly trace mode/type."""
         return self.plot_type_combo.currentData() or "lines"
 
     def evolution_params(self) -> tuple[str | None, str | None, str | None, int]:
+        """Return the current matrix/time/value/step selection for evolution mode."""
         return (
             self.evo_matrix_combo.currentData() or None,
             self.evo_time_combo.currentData() or None,
@@ -592,29 +634,33 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
     # ── private ──────────────────────────────────────────────────────
 
     def _sync_mode(self) -> None:
+        """Show the correct control group for the active plotting mode."""
         is_series = self.mode() == "series"
         self._series_widget.setVisible(is_series)
         self._evo_widget.setVisible(not is_series)
         self.changed.emit()
 
     def _on_matrix_changed(self) -> None:
-        from numpy import ndarray as _ndarray
+        """Refresh the evolution slider when the selected matrix changes."""
         name = self.evo_matrix_combo.currentData()
-        # slider range update requires parent's arrays_2d — use stored nb_arrays_2d if available
-        # GraphBuilderCard will call populate() which triggers _on_matrix_changed indirectly
+        print(f"[debug][axis-selector] matrix_changed name={name!r}", flush=True)
+        self.update_evo_slider_range(self._arrays_2d)
         self._update_step_label()
         self.changed.emit()
 
     def _on_step_changed(self, _val: int) -> None:
+        """Refresh labels and output when the evolution step changes."""
         self._update_step_label()
         self.changed.emit()
 
     def _update_step_label(self) -> None:
+        """Update the human-readable evolution step indicator text."""
         cur = self.evo_step_slider.value()
         tot = self.evo_step_slider.maximum()
         self.evo_step_label.setText(f"Step {cur} / {tot}")
 
     def update_evo_slider_range(self, arrays_2d: dict[str, np.ndarray]) -> None:
+        """Resize the evolution step slider to match the selected matrix height."""
         name = self.evo_matrix_combo.currentData()
         matrix = arrays_2d.get(name) if isinstance(name, str) and name else None
         rows = int(matrix.shape[0]) if matrix is not None else 0
@@ -637,15 +683,18 @@ class SeriesStyleWidget(QWidget):
     changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Create the per-series style editor container."""
         super().__init__(parent)
         self._rows: dict[str, dict[str, AutoCloseComboBox]] = {}
 
-        self.setStyleSheet("background:#f8fbfe; border:1px solid #dbe5ef;")
+        self.setStyleSheet(
+            "background:#ffffff; border:1px solid #d7e2ec; border-radius:8px;"
+        )
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(4)
         title = QLabel("Per-Series Styles", self)
-        title.setStyleSheet("color:#001f41; font-weight:700; font-size:12px;")
+        title.setStyleSheet(_LBL_SS)
         root.addWidget(title)
         self._grid = QGridLayout()
         self._grid.setContentsMargins(0, 0, 0, 0)
@@ -669,11 +718,11 @@ class SeriesStyleWidget(QWidget):
         headers = ("Y variable", "Plot type", "Line style", "Marker", "Color")
         for col, hdr in enumerate(headers):
             lbl = QLabel(hdr, self)
-            lbl.setStyleSheet("color:#355070; font-weight:700; font-size:11px;")
+            lbl.setStyleSheet(_LBL_SS)
             self._grid.addWidget(lbl, 0, col)
         for row, name in enumerate(y_vars, start=1):
             name_lbl = QLabel(name, self)
-            name_lbl.setStyleSheet("color:#0f1b2b; font-weight:600; font-size:12px;")
+            name_lbl.setStyleSheet(_LBL_SS)
             pt = AutoCloseComboBox(self)
             for lbl, val in PLOT_TYPE_OPTIONS:
                 pt.addItem(lbl, val)
@@ -706,6 +755,7 @@ class SeriesStyleWidget(QWidget):
                                  "marker_style": mk, "line_color": lc}
 
     def style_map(self) -> dict[str, dict[str, str]]:
+        """Return the currently configured style options for each selected series."""
         return {
             name: {k: str(w.currentData() or "") for k, w in combos.items()}
             for name, combos in self._rows.items()
@@ -714,6 +764,7 @@ class SeriesStyleWidget(QWidget):
     # ── private ──────────────────────────────────────────────────────
 
     def _clear(self) -> None:
+        """Remove every style row before rebuilding the per-series editor."""
         while self._grid.count():
             item = self._grid.takeAt(0)
             w = item.widget()
@@ -733,7 +784,9 @@ class PlotStyleWidget(QWidget):
     changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Build appearance controls for graph size and styling toggles."""
         super().__init__(parent)
+        self.setStyleSheet("QLabel { " + _LBL_SS + " }")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
@@ -802,12 +855,14 @@ class PlotStyleWidget(QWidget):
     # ── public ───────────────────────────────────────────────────────
 
     def graph_size(self) -> tuple[int, int]:
+        """Return the selected graph width and height preset."""
         size = self.size_combo.currentData()
         return size if isinstance(size, tuple) else (800, 700)
 
     def style_options(self) -> dict[str, Any]:
+        """Return the current appearance controls as a style dictionary."""
         w, h = self.graph_size()
-        return {
+        options = {
             "font_size":       int(self.font_size_combo.currentData() or 16),
             "line_width":      int(self.line_width_combo.currentData() or 2),
             "marker_size":     int(self.marker_size_combo.currentData() or 8),
@@ -818,6 +873,8 @@ class PlotStyleWidget(QWidget):
             "graph_width":     w,
             "graph_height":    h,
         }
+        print(f"[debug][plot-style-widget] style_options options={options!r}", flush=True)
+        return options
 
 
 # ── AxisLabelsWidget ──────────────────────────────────────────────────────────
@@ -827,7 +884,9 @@ class AxisLabelsWidget(QWidget):
     changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Build text inputs for the plot title and axis labels."""
         super().__init__(parent)
+        self.setStyleSheet("QLabel { " + _LBL_SS + " }")
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
@@ -849,9 +908,17 @@ class AxisLabelsWidget(QWidget):
         for edit in (self.title_edit, self.x_label_edit, self.y_label_edit):
             edit.textChanged.connect(self.changed)
 
-    def title(self)   -> str: return self.title_edit.text().strip()
-    def x_label(self) -> str: return self.x_label_edit.text().strip()
-    def y_label(self) -> str: return self.y_label_edit.text().strip()
+    def title(self) -> str:
+        """Return the current plot title text."""
+        return self.title_edit.text().strip()
+
+    def x_label(self) -> str:
+        """Return the current x-axis label text."""
+        return self.x_label_edit.text().strip()
+
+    def y_label(self) -> str:
+        """Return the current y-axis label text."""
+        return self.y_label_edit.text().strip()
 
 
 # ── AnalysisWidget ────────────────────────────────────────────────────────────
@@ -865,25 +932,24 @@ class AnalysisWidget(QWidget):
     changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Build smoothing, derivative, and curve-fit controls."""
         super().__init__(parent)
         self.setStyleSheet(
-            "QWidget { background:#f8fbfe; border:1px solid #dbe5ef; border-radius:4px; }"
+            "QWidget { background:transparent; border:none; }"
             "QLabel { border:none; background:transparent; color:#355070;"
-            " font-weight:600; font-size:11px; }"
+            " font-weight:700; font-size:12px; }"
             "QLineEdit { background:#fff; border:1px solid #d1dce8;"
-            " border-radius:4px; padding:2px 5px; font-size:11px; }"
+            " border-radius:4px; padding:2px 5px; font-size:12px; font-weight:400; }"
             "QSpinBox  { background:#fff; border:1px solid #d1dce8;"
-            " border-radius:4px; padding:1px 3px; font-size:11px; }"
+            " border-radius:4px; padding:1px 3px; font-size:12px; font-weight:400; }"
         )
+        print("[debug][analysis-widget] init shared_font labels=bold controls=regular", flush=True)
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(6)
-        title = QLabel("Analysis", self)
-        title.setStyleSheet("color:#001f41; font-weight:700; font-size:12px; border:none;")
         root.addLayout(self._build_smooth_row())
         root.addLayout(self._build_deriv_row())
         root.addLayout(self._build_fit_rows())
-        root.insertWidget(0, title)
 
     # ── public ───────────────────────────────────────────────────────
 
@@ -911,6 +977,7 @@ class AnalysisWidget(QWidget):
     # ── private builders ─────────────────────────────────────────────
 
     def _build_smooth_row(self) -> QHBoxLayout:
+        """Create the smoothing controls row."""
         row = QHBoxLayout()
         row.setSpacing(6)
         self.smooth_check = QCheckBox("Smooth", self)
@@ -934,6 +1001,7 @@ class AnalysisWidget(QWidget):
         return row
 
     def _build_deriv_row(self) -> QHBoxLayout:
+        """Create the derivative toggle row."""
         row = QHBoxLayout()
         self.deriv_check = QCheckBox("Derivative  dy/dx", self)
         self.deriv_check.setStyleSheet(_CB_SS)
@@ -943,6 +1011,7 @@ class AnalysisWidget(QWidget):
         return row
 
     def _build_fit_rows(self) -> QVBoxLayout:
+        """Create the curve-fit controls, model selector, and fit range inputs."""
         col = QVBoxLayout()
         col.setSpacing(4)
         r1 = QHBoxLayout()
@@ -991,11 +1060,13 @@ class AnalysisWidget(QWidget):
         return col
 
     def _on_model_changed(self) -> None:
+        """Show the custom-formula editor only for custom fit models."""
         self._custom_widget.setVisible(self.fit_model_combo.currentData() == "custom")
 
     # ── overlay helpers ───────────────────────────────────────────────
 
     def _smooth(self, fig: go.Figure, x: np.ndarray, y: np.ndarray, name: str) -> list[str]:
+        """Append a smoothed overlay trace when smoothing is enabled."""
         if not self.smooth_check.isChecked():
             return []
         try:
@@ -1012,6 +1083,7 @@ class AnalysisWidget(QWidget):
         return []
 
     def _derivative(self, fig: go.Figure, x: np.ndarray, y: np.ndarray, name: str) -> list[str]:
+        """Append a derivative overlay trace when derivative mode is enabled."""
         if not self.deriv_check.isChecked():
             return []
         try:
@@ -1024,6 +1096,7 @@ class AnalysisWidget(QWidget):
         return []
 
     def _fit(self, fig: go.Figure, x: np.ndarray, y: np.ndarray, name: str) -> list[str]:
+        """Fit the selected model and append the fitted curve overlay."""
         if not self.fit_check.isChecked():
             return []
         try:
@@ -1060,6 +1133,7 @@ class BaseGraphPanel(QWidget, NamespaceConsumerMixin):
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Initialize the shared graph state used by all graph panel variants."""
         super().__init__(parent)
         self._init_namespace_state()
         self._figure: go.Figure = build_notebook_plot_figure({}, None, [], "lines", "", "", "")
@@ -1067,9 +1141,11 @@ class BaseGraphPanel(QWidget, NamespaceConsumerMixin):
         self._latest_html:  str = ""
 
     def current_figure(self) -> go.Figure:
+        """Return the most recently built figure object."""
         return self._figure
 
     def set_latest_plot(self, title: str, html: str) -> None:
+        """Store the latest executed plot payload and trigger a panel refresh."""
         self._latest_title = title
         self._latest_html  = html
         self.refresh()
@@ -1080,20 +1156,21 @@ class BaseGraphPanel(QWidget, NamespaceConsumerMixin):
 
     def _render_figure(
         self,
-        plot_view: PlotView,
-        fig: go.Figure,
-        graph_width: int,
+        plot_view   : PlotView,
+        fig         : go.Figure,
+        graph_width : int,
         graph_height: int,
     ) -> None:
+        """Render one Plotly figure into a target `PlotView` widget."""
         html = fig.to_html(
             include_plotlyjs=True,
             full_html=False,
             config={
-                "responsive": False,
-                "displaylogo": False,
+                "responsive"          : False,
+                "displaylogo"         : False,
                 "toImageButtonOptions": {
-                    "format": "png", "filename": "graph",
-                    "scale": 3, "width": graph_width, "height": graph_height,
+                    "format"          : "png", "filename": "graph",
+                    "scale"           : 3, "width": graph_width, "height": graph_height,
                 },
             },
         )
@@ -1117,6 +1194,7 @@ class GraphBuilderCard(BaseGraphPanel):
         show_remove: bool = False,
         show_analysis: bool = True,
     ) -> None:
+        """Create one reusable graph-builder card and all of its subcontrols."""
         super().__init__(parent)
         self._card_title = "Notebook Plot Builder"
 
@@ -1143,6 +1221,7 @@ class GraphBuilderCard(BaseGraphPanel):
     def set_namespace(
         self, arrays_1d: dict[str, np.ndarray], arrays_2d: dict[str, np.ndarray]
     ) -> None:
+        """Inject the current arrays and refresh every selector from them."""
         self._nb_arrays_1d = arrays_1d
         self._nb_arrays_2d = arrays_2d
         self._data_source.update_notebook_arrays(arrays_1d)
@@ -1156,18 +1235,22 @@ class GraphBuilderCard(BaseGraphPanel):
         self.refresh()
 
     def set_card_title(self, title: str) -> None:
+        """Update the visible card title shown in the header."""
         self._card_title = title
         self._title_label.setText(title)
 
     def set_remove_enabled(self, enabled: bool) -> None:
+        """Show or hide the remove affordance for this graph card."""
         self._remove_btn.setVisible(enabled)
 
     def refresh_plot(self) -> None:
+        """Public alias for `refresh()` used by compatibility callers."""
         self.refresh()
 
     # ── BaseGraphPanel override ───────────────────────────────────────
 
     def refresh(self) -> None:
+        """Rebuild the current figure from the selected controls and data source."""
         mode      = self._axis_selector.mode()
         arrays_1d = self._data_source.active_arrays_1d()
         style     = self._plot_style.style_options()
@@ -1219,13 +1302,21 @@ class GraphBuilderCard(BaseGraphPanel):
     # ── layout builder ────────────────────────────────────────────────
 
     def _build_layout(self, show_remove: bool, show_analysis: bool) -> None:
+        """
+        Constructs the layout for the graph builder card, including settings, 
+        preview panels, and optional sections for analysis or removal.
+        
+        Args:
+            show_remove (bool): Whether to show the remove button in the card header.
+            show_analysis (bool): Whether to include the analysis section in the settings panel.
+        """
         card_layout = QHBoxLayout(self)
-        card_layout.setContentsMargins(10, 10, 10, 10)
+        card_layout.setContentsMargins(12, 12, 12, 12)
         card_layout.setSpacing(12)
 
         # settings panel (left)
         settings = QWidget(self)
-        settings.setStyleSheet("background:#ffffff;")
+        settings.setStyleSheet("background:transparent;")
         min_w = 640 if show_analysis else 380
         max_w = 780 if show_analysis else 480
         settings.setMinimumWidth(min_w)
@@ -1252,21 +1343,61 @@ class GraphBuilderCard(BaseGraphPanel):
         hdr.addWidget(self._remove_btn)
         sl.addLayout(hdr)
 
+        plot_setup_body = QWidget(settings)
+        plot_setup_layout = QVBoxLayout(plot_setup_body)
+        plot_setup_layout.setContentsMargins(0, 0, 0, 0)
+        plot_setup_layout.setSpacing(8)
+        plot_setup_layout.addWidget(self._axis_selector)
+        plot_setup_layout.addWidget(self._series_style)
+
         if show_analysis:
-            sl.addWidget(self._data_source)
-        sl.addWidget(self._axis_selector)
-        sl.addWidget(self._series_style)
-        sl.addWidget(self._plot_style)
-        sl.addWidget(self._axis_labels)
+            sl.addWidget(
+                self._make_section(
+                    "Data",
+                    self._data_source,
+                    settings,
+                )
+            )
+        sl.addWidget(
+            self._make_section(
+                "Plot Setup",
+                plot_setup_body,
+                settings,
+            )
+        )
+        sl.addWidget(
+            self._make_section(
+                "Appearance",
+                self._plot_style,
+                settings,
+            )
+        )
+        sl.addWidget(
+            self._make_section(
+                "Labels",
+                self._axis_labels,
+                settings,
+            )
+        )
         if show_analysis:
-            sl.addWidget(self._analysis)
+            sl.addWidget(
+                self._make_section(
+                    "Analysis",
+                    self._analysis,
+                    settings,
+                )
+            )
         sl.addStretch(1)
 
         # preview panel (right)
         preview = QWidget(self)
+        preview.setObjectName("graphPreviewCard")
         pvl = QVBoxLayout(preview)
-        pvl.setContentsMargins(0, 0, 0, 0)
+        pvl.setContentsMargins(12, 12, 12, 12)
         pvl.setSpacing(6)
+        preview_title = QLabel("Live Preview", preview)
+        preview_title.setStyleSheet(_SECTION_TITLE_SS)
+        pvl.addWidget(preview_title)
         pvl.addWidget(self._status_label)
         pvl.addWidget(self._plot_view, 1)
 
@@ -1278,7 +1409,31 @@ class GraphBuilderCard(BaseGraphPanel):
         self.controller_status = self._status_label
         self.controller_plot   = self._plot_view
 
+    def _make_section(
+        self,
+        title: str,
+        body: QWidget,
+        parent: QWidget,
+    ) -> QWidget:
+        """Wrap one control group in the standard titled section card UI."""
+        print(f"[debug][graph-builder-card] make_section title={title!r}", flush=True)
+        section = QWidget(parent)
+        section.setObjectName("graphSection")
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+        title_label = QLabel(title, section)
+        title_label.setStyleSheet(_SECTION_TITLE_SS)
+        layout.addWidget(title_label)
+        layout.addWidget(body)
+        return section
+
     def _connect_signals(self) -> None:
+        """
+        Connects signals to their respective slots for handling changes 
+        from user interactions. Any changes in these components will 
+        automatically trigger updates to the graph or internal state.
+        """
         self._data_source.changed.connect(self._on_source_changed)
         self._axis_selector.changed.connect(self.refresh)
         self._series_style.changed.connect(self.refresh)
@@ -1287,6 +1442,7 @@ class GraphBuilderCard(BaseGraphPanel):
         self._analysis.changed.connect(self.refresh)
 
     def _on_source_changed(self) -> None:
+        """Reconfigure selectors after switching between notebook and CSV data."""
         is_csv = self._data_source.is_csv()
         if is_csv:
             self._axis_selector.mode_combo.blockSignals(True)
@@ -1307,6 +1463,7 @@ class NotebookGraphWorkspace(QWidget):
     """Notebook-tab graph workspace — holds one or more GraphBuilderCards."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Create the notebook-side stacked graph workspace."""
         super().__init__(parent)
         self._nb_arrays_1d: dict[str, np.ndarray] = {}
         self._nb_arrays_2d: dict[str, np.ndarray] = {}
@@ -1329,15 +1486,19 @@ class NotebookGraphWorkspace(QWidget):
     # ── public ───────────────────────────────────────────────────────
 
     def primary_card(self) -> GraphBuilderCard:
+        """Return the first graph card in the workspace."""
         return self._cards[0]
 
     def cards(self) -> list[GraphBuilderCard]:
+        """Return a snapshot list of all graph cards in the workspace."""
         return list(self._cards)
 
     def card_count(self) -> int:
+        """Return the number of graph cards currently in the workspace."""
         return len(self._cards)
 
     def add_graph_card(self) -> GraphBuilderCard:
+        """Append a new graph card below the existing notebook graph cards."""
         card = GraphBuilderCard(self, show_remove=bool(self._cards), show_analysis=False)
         card.remove_requested.connect(self.remove_graph_card)
         card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
@@ -1348,6 +1509,7 @@ class NotebookGraphWorkspace(QWidget):
         return card
 
     def remove_graph_card(self, card: GraphBuilderCard) -> None:
+        """Remove one graph card while keeping at least one card alive."""
         if card not in self._cards or len(self._cards) <= 1:
             return
         self._cards.remove(card)
@@ -1357,11 +1519,13 @@ class NotebookGraphWorkspace(QWidget):
         self._renumber_cards()
 
     def set_namespace(self, namespace: dict[str, Any]) -> None:
+        """Push a new notebook namespace snapshot into every graph card."""
         self._nb_arrays_1d, self._nb_arrays_2d = extract_notebook_array_variables(namespace)
         for card in self._cards:
             card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
 
     def set_latest_plot(self, title: str, html: str) -> None:
+        """Push the latest executed plot payload into every graph card."""
         self._latest_title = title
         self._latest_html  = html
         for card in self._cards:
@@ -1370,6 +1534,7 @@ class NotebookGraphWorkspace(QWidget):
     # ── private ──────────────────────────────────────────────────────
 
     def _renumber_cards(self) -> None:
+        """Rename cards sequentially and refresh their remove-button state."""
         for i, card in enumerate(self._cards, start=1):
             card.set_card_title(f"Graph {i}")
             card.set_remove_enabled(len(self._cards) > 1)
@@ -1384,6 +1549,7 @@ class NotebookPlotPanel(QWidget):
     """
 
     def __init__(self, parent: QWidget | None = None, layout_mode: str = "advanced") -> None:
+        """Create the graphs-tab container with one main graph card and outputs area."""
         super().__init__(parent)
         self.layout_mode = layout_mode
         self.setStyleSheet("background:#ffffff;")
@@ -1413,8 +1579,37 @@ class NotebookPlotPanel(QWidget):
         root.addLayout(hdr)
 
         # main card (with analysis features)
-        self.main_card = GraphBuilderCard(self, show_remove=False, show_analysis=True)
+        # Initialize and configure the main graph card with integrated analysis features
+        self.main_card              = GraphBuilderCard(self, show_remove=False, show_analysis=True)
         root.addWidget(self.main_card)
+        
+        # Extract and expose sub-widgets and components from the main graph card
+        # This allows for direct access to these components for further interactions or configurations
+        self.mode_combo             = self.main_card._axis_selector.mode_combo
+        self.graph_size_combo       = self.main_card._plot_style.size_combo
+        self.series_controls        = self.main_card._axis_selector._series_widget
+        self.evolution_controls     = self.main_card._axis_selector._evo_widget
+        self.x_combo                = self.main_card._axis_selector.x_combo
+        self.y_combo                = self.main_card._axis_selector.y_combo
+        self.plot_type_combo        = self.main_card._axis_selector.plot_type_combo
+        self.evolution_matrix_combo = self.main_card._axis_selector.evo_matrix_combo
+        self.evolution_time_combo   = self.main_card._axis_selector.evo_time_combo
+        self.evolution_value_combo  = self.main_card._axis_selector.evo_value_combo
+        self.evolution_step_slider  = self.main_card._axis_selector.evo_step_slider
+        self.evolution_step_label   = self.main_card._axis_selector.evo_step_label
+        self.font_size_combo        = self.main_card._plot_style.font_size_combo
+        self.line_width_combo       = self.main_card._plot_style.line_width_combo
+        self.marker_size_combo      = self.main_card._plot_style.marker_size_combo
+        self.show_grid_check        = self.main_card._plot_style.grid_check
+        self.show_box_check         = self.main_card._plot_style.box_check
+        self.ticks_inside_check     = self.main_card._plot_style.ticks_check
+        self.minor_ticks_check      = self.main_card._plot_style.minor_check
+        self.title_edit             = self.main_card._axis_labels.title_edit
+        self.x_label_edit           = self.main_card._axis_labels.x_label_edit
+        self.y_label_edit           = self.main_card._axis_labels.y_label_edit
+        self.controller_plot        = self.main_card.controller_plot
+        self.controller_status      = self.main_card.controller_status
+        self._series_style_widgets  = self.main_card._series_style._rows
 
         # cell outputs
         self.outputs_scroll = QScrollArea(self)
@@ -1436,26 +1631,32 @@ class NotebookPlotPanel(QWidget):
     # ── public API ───────────────────────────────────────────────────
 
     def set_namespace(self, namespace: dict[str, Any]) -> None:
+        """Refresh all graph cards from the current notebook namespace."""
         self._nb_arrays_1d, self._nb_arrays_2d = extract_notebook_array_variables(namespace)
         self.main_card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
         for card in self._extra_cards:
             card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
 
     def current_controller_figure(self) -> go.Figure:
+        """Return the figure currently built by the main graph card."""
         return self.main_card.current_figure()
 
     def refresh_controller_plot(self) -> None:
+        """Force the main graph card to rebuild its current plot."""
         self.main_card.refresh()
 
     def output_count(self) -> int:
+        """Return the number of stored notebook cell graph outputs."""
         return len(self._output_widgets)
 
     def output_titles(self) -> list[str]:
+        """Return the visible titles for synced notebook output graphs."""
         return [t.text() for t, _w, _h in self._output_widgets.values()]
 
     # ── extra graph management ────────────────────────────────────────
 
     def _add_extra_graph(self) -> None:
+        """Append another advanced graph card to the graphs tab."""
         card = GraphBuilderCard(self, show_remove=True, show_analysis=True)
         card.remove_requested.connect(self._remove_extra_graph)
         card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
@@ -1463,6 +1664,7 @@ class NotebookPlotPanel(QWidget):
         self._root_layout.addWidget(card)
 
     def _remove_extra_graph(self, card: GraphBuilderCard) -> None:
+        """Remove one extra graph card from the graphs tab."""
         if card in self._extra_cards:
             self._extra_cards.remove(card)
         self._root_layout.removeWidget(card)
@@ -1472,6 +1674,7 @@ class NotebookPlotPanel(QWidget):
     # ── cell output sync ─────────────────────────────────────────────
 
     def sync_cell_outputs(self, cells: list[Any]) -> None:
+        """Mirror graph-like notebook cell outputs into the outputs section."""
         desired: list[str] = []
         for cell in cells:
             result = getattr(cell, "last_result", None)
@@ -1538,6 +1741,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Build the lightweight notebook-side quick graph preview widget."""
         super().__init__(parent)
         self._arrays_1d: dict[str, np.ndarray] = {}
         self._arrays_2d: dict[str, np.ndarray] = {}
@@ -1656,11 +1860,13 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
     # ── public API ───────────────────────────────────────────────────
 
     def set_namespace(self, namespace: dict[str, Any]) -> None:
+        """Refresh preview selectors from the latest notebook namespace."""
         self._arrays_1d, self._arrays_2d = extract_notebook_array_variables(namespace)
         self._populate_combos()
         self.refresh()
 
     def refresh(self) -> None:
+        """Rebuild the quick preview using live selections or fallback plot HTML."""
         mode = self._mode_combo.currentData() or "series"
         style = {"graph_width": None, "graph_height": 360,
                  "font_size": 14, "line_width": 2, "marker_size": 8,
@@ -1714,6 +1920,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
     # ── private ──────────────────────────────────────────────────────
 
     def _populate_combos(self) -> None:
+        """Rebuild every quick-preview combo box from the current arrays."""
         prev_x      = self._x_combo.currentData()
         prev_y      = set(self._y_combo.checked_values())
         prev_matrix = self._evo_matrix_combo.currentData()
@@ -1763,12 +1970,14 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._on_matrix_changed()
 
     def _sync_mode(self) -> None:
+        """Swap quick-preview controls between series and evolution layouts."""
         mode = self._mode_combo.currentData() or "series"
         self._series_widget.setVisible(mode == "series")
         self._evo_widget.setVisible(mode == "evolution")
         self.refresh()
 
     def _on_matrix_changed(self) -> None:
+        """Resize the quick-preview evolution slider for the selected matrix."""
         name   = self._evo_matrix_combo.currentData()
         matrix = self._arrays_2d.get(name) if isinstance(name, str) else None
         rows   = int(matrix.shape[0]) if matrix is not None else 0

@@ -10,15 +10,20 @@ from utils.notebook_persistence import NOTEBOOK_JSON_VERSION, deserialize_notebo
 
 @dataclass
 class NotebookDocument:
+    """In-memory representation of notebook cells, metadata, and layout."""
+
     cells: list[dict[str, Any]]
     metadata: dict[str, Any] = field(default_factory=dict)
     layout: dict[str, Any] = field(default_factory=lambda: {"left_column_width_pct": 50})
 
 
 class NotebookStorage:
+    """Load and save notebook JSON documents with version validation."""
+
     version = NOTEBOOK_JSON_VERSION
 
     def default_document(self) -> NotebookDocument:
+        """Return a new single-cell starter notebook document."""
         print("[debug][storage] default_document", flush=True)
         return NotebookDocument(
             cells=[{"id": "cell-1", "type": "code", "column": "left", "panel_width": None, "source": "", "outputs": []}],
@@ -27,6 +32,7 @@ class NotebookStorage:
         )
 
     def _extract_version(self, payload: dict[str, Any]) -> int:
+        """Validate and resolve the notebook JSON version from a payload."""
         print("[debug][storage] extract_version:start", flush=True)
         payload_version = payload.get("version")
         metadata = dict(payload.get("metadata") or {})
@@ -59,6 +65,7 @@ class NotebookStorage:
         return resolved_version
 
     def save(self, path: str | Path, document: NotebookDocument) -> None:
+        """Serialize a notebook document and write it to disk."""
         target = Path(path)
         payload = serialize_notebook_cells(document.cells, document.layout)
         payload["metadata"] = {**dict(document.metadata or {}), "version": self.version}
@@ -82,6 +89,7 @@ class NotebookStorage:
         target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def load(self, path: str | Path) -> NotebookDocument:
+        """Read a notebook JSON file and reconstruct its document structure."""
         source = Path(path)
         print(f"[debug][storage] load:path path={str(source)!r}", flush=True)
         payload = json.loads(source.read_text(encoding="utf-8"))

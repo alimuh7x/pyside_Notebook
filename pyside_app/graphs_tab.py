@@ -8,7 +8,10 @@ from pyside_app.notebook_plot_panel import NotebookPlotPanel
 
 
 class GraphsTab(QWidget):
+    """Host the advanced graphs workspace and keep it synced with notebook state."""
+
     def __init__(self, graph_state: NotebookGraphState, parent: QWidget | None = None) -> None:
+        """Create the scrollable graphs tab and connect shared graph-state signals."""
         super().__init__(parent)
         print("[debug][graphs-tab] init:start", flush=True)
         self.graph_state = graph_state
@@ -42,10 +45,12 @@ class GraphsTab(QWidget):
         print("[debug][graphs-tab] init:done", flush=True)
 
     def _handle_namespace_changed(self, namespace: dict) -> None:
+        """Refresh the graph builder when the notebook namespace changes."""
         print(f"[debug][graphs-tab] namespace_changed count={len(namespace)}", flush=True)
         self.plot_panel.set_namespace(namespace)
 
     def _handle_latest_plot_changed(self, title: str, html: str) -> None:
+        """React to the latest executed plot update from the notebook tab."""
         print(
             f"[debug][graphs-tab] latest_plot_changed title={title!r} html_length={len(html)}",
             flush=True,
