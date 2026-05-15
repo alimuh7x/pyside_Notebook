@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pytest
 
 
-from pyside_app.execution_engine import ExecutionEngine
+from pyside_app.execution_engine import ExecutionEngine, detect_cell_parameters
 
 
 def test_engine_executes_code_and_returns_last_expression():
@@ -179,3 +179,31 @@ def test_engine_namespace_snapshot_returns_copy():
     snapshot["value"] = -1
 
     assert engine.get_namespace()["value"] == 42
+
+
+def test_detect_cell_parameters_filters_bookkeeping_and_prioritizes_physics_knobs():
+    params = detect_cell_parameters(
+        "save_id = 0\n"
+        "n_save = 12\n"
+        "D = 0.1\n"
+        "dt = 0.0005\n"
+        "Nx = 400\n"
+        "omega_phi = 0.1\n"
+        "E_alpha = -0.30\n"
+    )
+
+    assert "save_id" not in params
+    assert "n_save" not in params
+    assert list(params)[:3] == ["D", "dt", "E_alpha"]
+    assert params["D"]["scale"] == "log"
+    assert params["dt"]["scale"] == "log"
+    assert params["Nx"]["is_int"] is True
+    assert params["omega_phi"]["min"] == 0.0
+    assert params["omega_phi"]["max"] == 1.0
+
+
+def test_detect_cell_parameters_uses_log_scale_for_tiny_positive_values():
+    params = detect_cell_parameters("tolerance = 1e-8\nrate_constant = 2500.0")
+
+    assert params["tolerance"]["scale"] == "log"
+    assert params["rate_constant"]["scale"] == "log"

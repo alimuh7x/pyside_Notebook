@@ -148,7 +148,13 @@ class ExecutionController:
         self.port.apply_cell_result(cell, result)
         self.ui.refresh_completion_words()
         self.ui.refresh_variables_panel()
-        self.graph_controller.refresh_graphs_panel(self.execution_engine.get_namespace())
+        namespace = self.execution_engine.get_namespace()
+        self.graph_controller.refresh_graphs_panel(namespace)
+        # Save baseline arrays to temp files (slider runs add their own entries)
+        if not result.error:
+            from pyside_app import array_store
+            array_store.store_run(namespace, label="baseline")
+            print(f"[debug][execution-controller] arrays saved to {array_store.get_store_dir()}", flush=True)
         self.state.execution.is_running = False
         if result.error:
             self.state.execution.run_all_queue.clear()
@@ -182,6 +188,10 @@ class ExecutionController:
         self.ui.refresh_completion_words()
         self.ui.refresh_variables_panel()
         self.graph_controller.refresh_graphs_panel(self.execution_engine.get_namespace())
+        # Clear graph history and temp array files
+        self.graph_controller.graph_panel.clear_history()
+        from pyside_app import array_store
+        array_store.clear()
         self.ui.set_status("Kernel restarted" if restarted_now else "Kernel restart pending", self.ready_style if restarted_now else self.info_style)
         self.ui.schedule_autosave()
 

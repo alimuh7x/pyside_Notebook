@@ -177,9 +177,9 @@ def _apply_layout(
     fig.update_layout(
         title={"text": title or None, "font": {"size": fs + 4, "color": "#0f1b2b"}},
         showlegend=showlegend, plot_bgcolor="white", paper_bgcolor="white",
-        margin={"l": 60, "r": 20, "t": 35, "b": 90},
+        margin={"l": 60, "r": 160, "t": 35, "b": 90},
         font={"size": fs, "color": "#0f1b2b"},
-        legend={"orientation": "v", "x": 0.01, "y": 0.99,
+        legend={"orientation": "v", "x": 1.02, "y": 1.0,
                 "xanchor": "left", "yanchor": "top", "font": {"size": fs}},
         barmode=barmode, width=s.get("graph_width"), height=s.get("graph_height"),
     )
@@ -280,14 +280,23 @@ def build_notebook_plot_figure(
     return fig
 
 
+_EVO_COLORS = [
+    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+    "#8c564b", "#e377c2", "#17becf", "#bcbd22", "#7f7f7f",
+    "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
+    "#c49c94", "#f7b6d2", "#9edae5", "#dbdb8d", "#c7c7c7",
+]
+_EVO_MAX_ROWS = 20
+
+
 def build_notebook_evolution_figure(
     arrays_1d: dict[str, np.ndarray], arrays_2d: dict[str, np.ndarray],
     matrix_var: str | None, time_var: str | None, value_var: str | None,
-    step_index: int, plot_type: str,
+    plot_type: str,
     title: str, x_title: str, y_title: str,
     style: dict[str, Any] | None = None,
 ) -> go.Figure:
-    """Build a figure showing one time-step slice from a 2D evolution matrix."""
+    """Plot all rows of a 2D array as separate traces on one graph."""
     fig = go.Figure()
     s = dict(_default_style())
     if style:
@@ -297,31 +306,41 @@ def build_notebook_evolution_figure(
     ms = int(s.get("marker_size", 7))
     matrix = arrays_2d.get(matrix_var) if matrix_var else None
     if matrix is None:
-        fig.add_annotation(text="Select a 2D array to plot its evolution.",
+        fig.add_annotation(text="Select a 2D array to plot.",
                            x=0.5, y=0.5, xref="paper", yref="paper",
                            showarrow=False, font={"size": fs, "color": "#94a3b8"})
         return fig
     rows, cols = matrix.shape
-    step = min(max(0, step_index), rows - 1)
     t_axis = arrays_1d.get(time_var) if isinstance(time_var, str) and time_var else None
     t_axis = t_axis if t_axis is not None and len(t_axis) == rows else np.arange(rows, dtype=float)
     v_axis = arrays_1d.get(value_var) if isinstance(value_var, str) and value_var else None
     v_axis = v_axis if v_axis is not None and len(v_axis) == cols else np.arange(cols, dtype=float)
-    y_data = matrix[step]
-    t_val  = t_axis[step] if len(t_axis) > step else step
-    tname  = f"{matrix_var or 'matrix'} @ step {step}"
-    if plot_type == "bar":
-        fig.add_trace(go.Bar(x=v_axis, y=y_data, name=tname, marker_color="#1f77b4"))
+
+    # If more rows than limit, subsample evenly
+    if rows <= _EVO_MAX_ROWS:
+        row_indices = list(range(rows))
     else:
-        fig.add_trace(go.Scatter(x=v_axis, y=y_data, name=tname,
-                                 mode  =plot_type if plot_type != "histogram" else "lines",
-                                 line  ={"color": "#1f77b4", "width": lw},
-                                 marker={"color": "#1f77b4", "size": ms}))
+        row_indices = [round(i * (rows - 1) / (_EVO_MAX_ROWS - 1)) for i in range(_EVO_MAX_ROWS)]
+
+    for color_i, row_i in enumerate(row_indices):
+        t_val = t_axis[row_i] if len(t_axis) > row_i else row_i
+        tname = f"t={t_val:.4g}" if isinstance(t_val, float) else f"row {row_i}"
+        c = _EVO_COLORS[color_i % len(_EVO_COLORS)]
+        y_data = matrix[row_i]
+        if plot_type == "bar":
+            fig.add_trace(go.Bar(x=v_axis, y=y_data, name=tname, marker_color=c))
+        else:
+            fig.add_trace(go.Scatter(
+                x=v_axis, y=y_data, name=tname,
+                mode=plot_type if plot_type != "histogram" else "lines",
+                line={"color": c, "width": lw},
+                marker={"color": c, "size": ms},
+            ))
     _apply_layout(fig,
-                  title=title or f"{matrix_var or '2D array'} @ t={t_val}",
-                  x_title=x_title or (value_var or "value index"),
+                  title=title or (matrix_var or "2D array"),
+                  x_title=x_title or (value_var or "column index"),
                   y_title=y_title or (matrix_var or "value"),
-                  showlegend=False, style=s)
+                  showlegend=rows > 1, style=s)
     return fig
 
 
@@ -526,15 +545,10 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         self.evo_time_combo.addItem("Row index", "")
         self.evo_value_combo  = AutoCloseComboBox(self)
         self.evo_value_combo.addItem("Column index", "")
-        self.evo_step_slider  = QSlider(Qt.Orientation.Horizontal, self)
-        self.evo_step_slider.setRange(0, 0)
-        self.evo_step_label   = QLabel("Step 0 / 0", self)
         for row_lbl, widget in (
             ("Evolution array", self.evo_matrix_combo),
             ("Time axis", self.evo_time_combo),
             ("Value axis", self.evo_value_combo),
-            ("Time step", self.evo_step_slider),
-            ("Selected step", self.evo_step_label),
         ):
             evo_form.addRow(row_lbl, widget)
         self._evo_widget.hide()
@@ -548,7 +562,6 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         self.evo_matrix_combo.currentIndexChanged.connect(self._on_matrix_changed)
         self.evo_time_combo.currentIndexChanged.connect(self.changed)
         self.evo_value_combo.currentIndexChanged.connect(self.changed)
-        self.evo_step_slider.valueChanged.connect(self._on_step_changed)
 
     # ── public ───────────────────────────────────────────────────────
 
@@ -622,13 +635,12 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         """Return the currently selected Plotly trace mode/type."""
         return self.plot_type_combo.currentData() or "lines"
 
-    def evolution_params(self) -> tuple[str | None, str | None, str | None, int]:
-        """Return the current matrix/time/value/step selection for evolution mode."""
+    def evolution_params(self) -> tuple[str | None, str | None, str | None]:
+        """Return the current matrix/time/value selection for evolution mode."""
         return (
             self.evo_matrix_combo.currentData() or None,
             self.evo_time_combo.currentData() or None,
             self.evo_value_combo.currentData() or None,
-            self.evo_step_slider.value(),
         )
 
     # ── private ──────────────────────────────────────────────────────
@@ -641,35 +653,8 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         self.changed.emit()
 
     def _on_matrix_changed(self) -> None:
-        """Refresh the evolution slider when the selected matrix changes."""
-        name = self.evo_matrix_combo.currentData()
-        print(f"[debug][axis-selector] matrix_changed name={name!r}", flush=True)
-        self.update_evo_slider_range(self._arrays_2d)
-        self._update_step_label()
+        print(f"[debug][axis-selector] matrix_changed name={self.evo_matrix_combo.currentData()!r}", flush=True)
         self.changed.emit()
-
-    def _on_step_changed(self, _val: int) -> None:
-        """Refresh labels and output when the evolution step changes."""
-        self._update_step_label()
-        self.changed.emit()
-
-    def _update_step_label(self) -> None:
-        """Update the human-readable evolution step indicator text."""
-        cur = self.evo_step_slider.value()
-        tot = self.evo_step_slider.maximum()
-        self.evo_step_label.setText(f"Step {cur} / {tot}")
-
-    def update_evo_slider_range(self, arrays_2d: dict[str, np.ndarray]) -> None:
-        """Resize the evolution step slider to match the selected matrix height."""
-        name = self.evo_matrix_combo.currentData()
-        matrix = arrays_2d.get(name) if isinstance(name, str) and name else None
-        rows = int(matrix.shape[0]) if matrix is not None else 0
-        max_idx = max(rows - 1, 0)
-        self.evo_step_slider.blockSignals(True)
-        self.evo_step_slider.setRange(0, max_idx)
-        self.evo_step_slider.setValue(min(self.evo_step_slider.value(), max_idx))
-        self.evo_step_slider.blockSignals(False)
-        self._update_step_label()
 
 
 # ── SeriesStyleWidget ─────────────────────────────────────────────────────────
@@ -1226,7 +1211,6 @@ class GraphBuilderCard(BaseGraphPanel):
         self._nb_arrays_2d = arrays_2d
         self._data_source.update_notebook_arrays(arrays_1d)
         self._axis_selector.populate(self._data_source.active_arrays_1d(), arrays_2d)
-        self._axis_selector.update_evo_slider_range(arrays_2d)
         status = (
             f"{len(arrays_1d)} 1D array(s), {len(arrays_2d)} 2D array(s)"
             if arrays_1d or arrays_2d else "No numeric arrays available"
@@ -1257,10 +1241,10 @@ class GraphBuilderCard(BaseGraphPanel):
         w, h      = self._plot_style.graph_size()
 
         if mode == "evolution":
-            matrix_var, time_var, value_var, step = self._axis_selector.evolution_params()
+            matrix_var, time_var, value_var = self._axis_selector.evolution_params()
             self._figure = build_notebook_evolution_figure(
                 arrays_1d, self._nb_arrays_2d,
-                matrix_var, time_var, value_var, step,
+                matrix_var, time_var, value_var,
                 self._axis_selector.plot_type(),
                 self._axis_labels.title(),
                 self._axis_labels.x_label(),
@@ -1268,9 +1252,7 @@ class GraphBuilderCard(BaseGraphPanel):
                 style,
             )
             overlay_status = ""
-            base_status = (
-                f"Evolution: matrix={matrix_var or 'none'}  step={step}"
-            )
+            base_status = f"Evolution: matrix={matrix_var or 'none'}"
         else:
             y_vars = self._axis_selector.selected_y_vars()
             self._series_style.update_y_vars(y_vars, self._axis_selector.plot_type())
@@ -1595,8 +1577,6 @@ class NotebookPlotPanel(QWidget):
         self.evolution_matrix_combo = self.main_card._axis_selector.evo_matrix_combo
         self.evolution_time_combo   = self.main_card._axis_selector.evo_time_combo
         self.evolution_value_combo  = self.main_card._axis_selector.evo_value_combo
-        self.evolution_step_slider  = self.main_card._axis_selector.evo_step_slider
-        self.evolution_step_label   = self.main_card._axis_selector.evo_step_label
         self.font_size_combo        = self.main_card._plot_style.font_size_combo
         self.line_width_combo       = self.main_card._plot_style.line_width_combo
         self.marker_size_combo      = self.main_card._plot_style.marker_size_combo
@@ -1745,22 +1725,28 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         super().__init__(parent)
         self._arrays_1d: dict[str, np.ndarray] = {}
         self._arrays_2d: dict[str, np.ndarray] = {}
+        # history: list of (label, arrays_1d_snapshot) oldest first
+        self._run_history: list[tuple[str, dict[str, np.ndarray]]] = []
+        self._current_label: str = "baseline"  # label for whatever is in _arrays_1d now
+        self._MAX_HISTORY = 8
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(8)
 
-        # header
-        hdr = QHBoxLayout()
-        lbl = QLabel("Quick Graph Preview", self)
-        lbl.setStyleSheet("color:#001f41; font-weight:700; font-size:15px;")
-        hdr.addWidget(lbl)
-        hdr.addStretch(1)
-        root.addLayout(hdr)
+        self._clear_hist_btn = QPushButton("Clear history", self)
+        self._clear_hist_btn.setFixedHeight(22)
+        self._clear_hist_btn.setStyleSheet(
+            "QPushButton { font-size:10px; padding:2px 8px; border:1px solid #94a3b8;"
+            " border-radius:3px; background:#e2e8f0; color:#334155; }"
+            "QPushButton:hover { background:#cbd5e1; }"
+        )
+        self._clear_hist_btn.clicked.connect(self.clear_history)
+        self._clear_hist_btn.hide()
 
         self._status_label = QLabel("Use the quick controls to preview graphs.", self)
         self._status_label.setStyleSheet("color:#64748b; font-size:12px;")
-        root.addWidget(self._status_label)
+        self._status_label.hide()
 
         # controls card
         card = QWidget(self)
@@ -1771,17 +1757,15 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             " border-radius:6px; padding:4px 6px; }"
         )
         cl = QVBoxLayout(card)
-        cl.setContentsMargins(8, 8, 8, 8)
-        cl.setSpacing(8)
+        cl.setContentsMargins(8, 6, 8, 6)
+        cl.setSpacing(4)
 
-        mode_row = QHBoxLayout()
-        mode_row.setSpacing(8)
+        controls_row = QHBoxLayout()
+        controls_row.setSpacing(8)
         self._mode_combo = AutoCloseComboBox(card)
         self._mode_combo.addItem("Series (1D)", "series")
         self._mode_combo.addItem("Evolution (2D)", "evolution")
-        mode_row.addWidget(QLabel("Mode", card))
-        mode_row.addWidget(self._mode_combo, 1)
-        cl.addLayout(mode_row)
+        controls_row.addWidget(self._control_block(card, "Mode", self._mode_combo), 2)
 
         # series controls
         self._series_widget = QWidget(card)
@@ -1799,41 +1783,38 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             ("Plot type", self._plot_type_combo, 1),
             ("Y variable(s)", self._y_combo, 2),
         ):
-            blk = QWidget(self._series_widget)
-            bl = QVBoxLayout(blk)
-            bl.setContentsMargins(0, 0, 0, 0)
-            bl.setSpacing(3)
-            bl.addWidget(QLabel(lbl_text, blk))
-            bl.addWidget(widget)
-            sr.addWidget(blk, stretch)
-        cl.addWidget(self._series_widget)
+            sr.addWidget(self._control_block(self._series_widget, lbl_text, widget), stretch)
+        controls_row.addWidget(self._series_widget, 6)
 
         # evolution controls
         self._evo_widget = QWidget(card)
-        eg = QGridLayout(self._evo_widget)
+        eg = QHBoxLayout(self._evo_widget)
         eg.setContentsMargins(0, 0, 0, 0)
-        eg.setHorizontalSpacing(8)
-        eg.setVerticalSpacing(6)
+        eg.setSpacing(8)
         self._evo_matrix_combo = AutoCloseComboBox(self._evo_widget)
         self._evo_matrix_combo.addItem("Select 2D array", "")
         self._evo_time_combo = AutoCloseComboBox(self._evo_widget)
         self._evo_time_combo.addItem("Row index", "")
         self._evo_value_combo = AutoCloseComboBox(self._evo_widget)
         self._evo_value_combo.addItem("Column index", "")
-        self._evo_step_slider = QSlider(Qt.Orientation.Horizontal, self._evo_widget)
-        self._evo_step_slider.setRange(0, 0)
-        self._evo_step_label = QLabel("Step 0 / 0", self._evo_widget)
-        for row_i, (row_lbl, widget) in enumerate((
-            ("Evolution array", self._evo_matrix_combo),
-            ("Time axis", self._evo_time_combo),
-            ("Value axis", self._evo_value_combo),
-            ("Time step", self._evo_step_slider),
-            ("Selected step", self._evo_step_label),
-        )):
-            eg.addWidget(QLabel(row_lbl, self._evo_widget), row_i, 0)
-            eg.addWidget(widget, row_i, 1)
+        self._evo_run_slider = QSlider(Qt.Orientation.Horizontal, self._evo_widget)
+        self._evo_run_slider.setRange(0, 0)
+        self._evo_run_label = QLabel("current", self._evo_widget)
+        self._evo_run_label.setStyleSheet(_MUTED_SS)
+        self._evo_run_label.setMinimumWidth(80)
+        for row_lbl, widget, stretch in (
+            ("Array", self._evo_matrix_combo, 2),
+            ("Time", self._evo_time_combo, 1),
+            ("Value", self._evo_value_combo, 1),
+            ("Run", self._evo_run_slider, 2),
+            ("", self._evo_run_label, 0),
+        ):
+            control = self._control_block(self._evo_widget, row_lbl, widget) if row_lbl else widget
+            eg.addWidget(control, stretch)
         self._evo_widget.hide()
-        cl.addWidget(self._evo_widget)
+        controls_row.addWidget(self._evo_widget, 6)
+        controls_row.addWidget(self._clear_hist_btn)
+        cl.addLayout(controls_row)
         root.addWidget(card)
 
         # plot view
@@ -1855,18 +1836,90 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._evo_matrix_combo.currentIndexChanged.connect(self._on_matrix_changed)
         self._evo_time_combo.currentIndexChanged.connect(self.refresh)
         self._evo_value_combo.currentIndexChanged.connect(self.refresh)
-        self._evo_step_slider.valueChanged.connect(self._on_step_changed)
+        self._evo_run_slider.valueChanged.connect(self._on_run_changed)
 
     # ── public API ───────────────────────────────────────────────────
 
     def set_namespace(self, namespace: dict[str, Any]) -> None:
-        """Refresh preview selectors from the latest notebook namespace."""
+        """Update from a main-cell run — clears slider history."""
         self._arrays_1d, self._arrays_2d = extract_notebook_array_variables(namespace)
+        self._run_history.clear()
+        self._current_label = "baseline"
+        self._clear_hist_btn.hide()
         self._populate_combos()
         self.refresh()
 
+    def _control_block(self, parent: QWidget, label: str, widget: QWidget) -> QWidget:
+        block = QWidget(parent)
+        layout = QVBoxLayout(block)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(1)
+        label_widget = QLabel(label, block)
+        label_widget.setStyleSheet("font-size:10px; font-weight:700; color:#355070; background:transparent; border:none;")
+        layout.addWidget(label_widget)
+        layout.addWidget(widget)
+        return block
+
+    def set_current_label(self, label: str) -> None:
+        """Set the label for the current namespace snapshot."""
+        self._current_label = label or "current"
+
+    def load_saved_runs_from_store(self) -> None:
+        """Load saved parameter runs for a newly created graph panel."""
+        if not self._arrays_1d:
+            self._update_run_slider(reset_to_current=True)
+            return
+        from pyside_app import array_store
+        anchor_name = next(iter(self._arrays_1d))
+        snapshots = array_store.get_run_snapshots(anchor_name)
+        history: list[tuple[str, dict[str, np.ndarray]]] = []
+        current_keys = set(self._arrays_1d)
+        for label, arrays in snapshots:
+            saved_1d, _saved_2d = extract_notebook_array_variables(arrays)
+            if not saved_1d:
+                continue
+            if current_keys and not (current_keys & set(saved_1d)):
+                continue
+            if label == self._current_label:
+                continue
+            history.append((label, {k: v.copy() for k, v in saved_1d.items()}))
+        self._run_history = list(reversed(history[: self._MAX_HISTORY]))
+        self._clear_hist_btn.setVisible(bool(self._run_history))
+        self._update_run_slider(reset_to_current=True)
+        self.refresh()
+
+    def add_run(self, namespace_snapshot: dict[str, Any], label: str) -> None:
+        """Record a slider run: demote current arrays to history, show new as current."""
+        new_1d, new_2d = extract_notebook_array_variables(namespace_snapshot)
+        if not new_1d and not new_2d:
+            return
+        print(
+            f"[debug][quick-graph-evolution] add_run label={label!r} "
+            f"arrays_1d={list(new_1d)} arrays_2d={list(new_2d)}",
+            flush=True,
+        )
+        # Demote current arrays to history using the label they were created with.
+        if self._arrays_1d:
+            self._run_history.append((self._current_label, {k: v.copy() for k, v in self._arrays_1d.items()}))
+            if len(self._run_history) > self._MAX_HISTORY:
+                self._run_history.pop(0)
+        self._arrays_1d = new_1d
+        self._arrays_2d = new_2d
+        self._current_label = label  # the new current data came from this param combo
+        self._populate_combos()
+        if (self._mode_combo.currentData() or "series") == "evolution":
+            self._update_run_slider(reset_to_current=True)
+        self._clear_hist_btn.setVisible(bool(self._run_history))
+        self.refresh()
+
+    def clear_history(self) -> None:
+        """Remove all accumulated slider-run traces."""
+        self._run_history.clear()
+        self._clear_hist_btn.hide()
+        self.refresh()
+
     def refresh(self) -> None:
-        """Rebuild the quick preview using live selections or fallback plot HTML."""
+        """Rebuild the quick preview, overlaying all historical runs as faded traces."""
         mode = self._mode_combo.currentData() or "series"
         style = {"graph_width": None, "graph_height": 360,
                  "font_size": 14, "line_width": 2, "marker_size": 8,
@@ -1875,25 +1928,94 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
 
         if mode == "evolution":
             matrix_var = self._evo_matrix_combo.currentData() or None
+            # Resolve which run's 2D array to use
+            arrays_1d_to_use = self._arrays_1d
+            arrays_2d_to_use = self._arrays_2d
+            run_label = "current"
+            if matrix_var:
+                history = self._saved_matrix_snapshots(matrix_var)  # newest first
+                n_runs = len(history)
+                if n_runs > 0:
+                    # slider 0 = most recent run, slider n_runs = current namespace
+                    run_idx = self._evo_run_slider.value()
+                    if run_idx < n_runs:
+                        run_label, arrays = history[run_idx]
+                        saved_1d, saved_2d = extract_notebook_array_variables(arrays)
+                        arrays_1d_to_use = saved_1d or self._arrays_1d
+                        arrays_2d_to_use = saved_2d if matrix_var in saved_2d else self._arrays_2d
+                    else:
+                        run_label = "current"
             self._figure = build_notebook_evolution_figure(
-                self._arrays_1d, self._arrays_2d,
+                arrays_1d_to_use, arrays_2d_to_use,
                 matrix_var,
                 self._evo_time_combo.currentData() or None,
                 self._evo_value_combo.currentData() or None,
-                self._evo_step_slider.value(),
                 self._plot_type_combo.currentData() or "lines",
-                "", "", "", style,
+                run_label if run_label != "current" else "", "", "", style,
             )
-            has_plot = bool(matrix_var and matrix_var in self._arrays_2d)
+            print(
+                f"[debug][quick-graph-evolution] refresh matrix={matrix_var!r} "
+                f"run={run_label!r} axes_1d={list(arrays_1d_to_use)} "
+                f"has_matrix={bool(matrix_var and matrix_var in arrays_2d_to_use)}",
+                flush=True,
+            )
+            has_plot = bool(matrix_var and matrix_var in arrays_2d_to_use)
         else:
             y_vars = [v for v in self._y_combo.checked_values() if isinstance(v, str)]
             x_var  = self._x_combo.currentData() or None
+            plot_type = self._plot_type_combo.currentData() or "lines"
             self._figure = build_notebook_plot_figure(
-                self._arrays_1d, x_var, y_vars,
-                self._plot_type_combo.currentData() or "lines",
+                self._arrays_1d, x_var, y_vars, plot_type,
                 "", "", "", {}, style,
             )
             has_plot = bool(y_vars)
+
+            # ── label current trace and force legend when history exists ──────
+            if has_plot and self._run_history:
+                self._figure.update_layout(showlegend=True)
+                cur_lbl = self._current_label[:40] if len(self._current_label) > 40 else self._current_label
+                for trace in self._figure.data:
+                    trace.name = f"▶ {cur_lbl}" if len(y_vars) == 1 else f"▶ {trace.name} | {cur_lbl}"
+
+            # ── overlay historical traces ─────────────────────────────────────
+            if has_plot and self._run_history:
+                x_current = self._arrays_1d.get(x_var) if x_var else None
+                _HIST_COLORS = [
+                    "#e07b39", "#9b59b6", "#27ae60", "#c0392b",
+                    "#16a085", "#8e44ad", "#d35400", "#2980b9",
+                ]
+                # Draw oldest first so newest sits on top
+                for h_idx, (h_label, h_arrays) in enumerate(reversed(self._run_history)):
+                    opacity = max(0.3, 0.9 - h_idx * 0.08)
+                    color = _HIST_COLORS[h_idx % len(_HIST_COLORS)]
+                    x_data = h_arrays.get(x_var) if x_var else None
+                    if x_data is None:
+                        x_data = x_current
+                    for y_var in y_vars:
+                        y_data = h_arrays.get(y_var)
+                        if y_data is None:
+                            continue
+                        short_label = h_label[:40] if len(h_label) > 40 else h_label
+                        trace_name = f"{short_label} | {y_var}" if len(y_vars) > 1 else short_label
+                        if plot_type in ("lines", "lines+markers"):
+                            self._figure.add_scatter(
+                                x=x_data, y=y_data,
+                                mode="lines" if plot_type == "lines" else "lines+markers",
+                                name=trace_name,
+                                line=dict(color=color, width=2),
+                                opacity=opacity,
+                                showlegend=True,
+                            )
+                        elif plot_type == "markers":
+                            self._figure.add_scatter(
+                                x=x_data, y=y_data,
+                                mode="markers",
+                                name=trace_name,
+                                marker=dict(color=color, size=5),
+                                opacity=opacity,
+                                showlegend=True,
+                            )
+                        # bar / histogram history not shown
 
         if not has_plot and self._latest_html:
             self._plot_view.setVisible(True)
@@ -1912,8 +2034,10 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._empty_label.setVisible(not has_plot)
         if has_plot:
             self._plot_view.set_html(html)
+        n_hist = len(self._run_history)
+        hist_note = f"  +{n_hist} saved" if n_hist else ""
         self._status_label.setText(
-            f"x={self._x_combo.currentData() or 'index'}"
+            f"x={self._x_combo.currentData() or 'index'}{hist_note}"
             if has_plot else "Run code to populate arrays."
         )
 
@@ -1963,6 +2087,12 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             default = names[1] if len(names) > 1 and x_name == names[0] else names[0]
             self._y_combo.set_checked_values([default])
 
+        if not prev_matrix and self._arrays_2d:
+            first_matrix = next(iter(self._arrays_2d))
+            idx = self._evo_matrix_combo.findData(first_matrix)
+            if idx >= 0:
+                self._evo_matrix_combo.setCurrentIndex(idx)
+
         for combo in (self._x_combo, self._y_combo, self._evo_matrix_combo,
                       self._evo_time_combo, self._evo_value_combo):
             combo.blockSignals(False)
@@ -1977,23 +2107,44 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self.refresh()
 
     def _on_matrix_changed(self) -> None:
-        """Resize the quick-preview evolution slider for the selected matrix."""
-        name   = self._evo_matrix_combo.currentData()
-        matrix = self._arrays_2d.get(name) if isinstance(name, str) else None
-        rows   = int(matrix.shape[0]) if matrix is not None else 0
-        max_s  = max(rows - 1, 0)
-        self._evo_step_slider.blockSignals(True)
-        self._evo_step_slider.setRange(0, max_s)
-        if self._evo_step_slider.value() > max_s:
-            self._evo_step_slider.setValue(max_s)
-        self._evo_step_slider.blockSignals(False)
-        self._update_step_label()
+        self._update_run_slider(reset_to_current=False)
         self.refresh()
 
-    def _on_step_changed(self, *_: Any) -> None:
-        self._update_step_label()
+    def _on_run_changed(self, _val: int) -> None:
+        self._update_run_label()
         self.refresh()
 
-    def _update_step_label(self) -> None:
-        cur = self._evo_step_slider.value()
-        self._evo_step_label.setText(f"Step {cur} / {self._evo_step_slider.maximum()}")
+    def _update_run_slider(self, reset_to_current: bool = False) -> None:
+        matrix_var = self._evo_matrix_combo.currentData()
+        n_runs = 0
+        if matrix_var:
+            n_runs = len(self._saved_matrix_snapshots(matrix_var))
+        previous = self._evo_run_slider.value()
+        self._evo_run_slider.blockSignals(True)
+        # positions: 0..n_runs-1 = saved runs (newest first), n_runs = current
+        self._evo_run_slider.setRange(0, n_runs)
+        next_value = n_runs if reset_to_current else min(previous, n_runs)
+        self._evo_run_slider.setValue(next_value)
+        self._evo_run_slider.blockSignals(False)
+        self._update_run_label()
+
+    def _update_run_label(self) -> None:
+        matrix_var = self._evo_matrix_combo.currentData()
+        if not matrix_var:
+            self._evo_run_label.setText("current")
+            return
+        history = self._saved_matrix_snapshots(matrix_var)
+        run_idx = self._evo_run_slider.value()
+        if run_idx < len(history):
+            label = history[run_idx][0]
+            self._evo_run_label.setText(f"{label}")
+        else:
+            self._evo_run_label.setText("current")
+
+    def _saved_matrix_snapshots(self, matrix_var: str) -> list[tuple[str, dict[str, np.ndarray]]]:
+        from pyside_app import array_store
+        return [
+            (label, arrays)
+            for label, arrays in array_store.get_run_snapshots(matrix_var)
+            if label != self._current_label
+        ]

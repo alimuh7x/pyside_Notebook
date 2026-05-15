@@ -11,6 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from pyside_app.execution_engine import ExecutionOutput, ExecutionResult
 from pyside_app.notebook_plot_panel import (
     NotebookPlotPanel,
+    QuickGraphPreviewPanel,
     build_notebook_plot_figure,
     extract_notebook_array_variables,
 )
@@ -443,3 +444,48 @@ def test_notebook_plot_panel_evolution_mode_uses_column_index_when_axis_length_m
     figure = panel.current_controller_figure()
     assert list(figure.data[0].x) == [0.0, 1.0, 2.0, 3.0]
     assert list(figure.data[0].y) == [9.0, 10.0, 11.0, 12.0]
+
+
+def test_quick_graph_evolution_run_slider_uses_saved_parameter_snapshot():
+    _app()
+    from pyside_app import array_store
+
+    array_store.clear()
+    panel = QuickGraphPreviewPanel()
+    panel.set_namespace(
+        {
+            "x": np.array([0.0, 1.0, 2.0, 3.0]),
+            "time": np.array([0.0, 1.0]),
+            "history": np.array([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]]),
+        }
+    )
+    array_store.store_run(
+        {
+            "x": np.array([10.0, 20.0, 30.0, 40.0]),
+            "time": np.array([0.0, 1.0]),
+            "history": np.array([[11.0, 12.0, 13.0, 14.0], [15.0, 16.0, 17.0, 18.0]]),
+        },
+        "D=1",
+    )
+    array_store.store_run(
+        {
+            "x": np.array([100.0, 200.0, 300.0, 400.0]),
+            "time": np.array([0.0, 1.0]),
+            "history": np.array([[21.0, 22.0, 23.0, 24.0], [25.0, 26.0, 27.0, 28.0]]),
+        },
+        "D=2",
+    )
+
+    panel._mode_combo.setCurrentIndex(panel._mode_combo.findData("evolution"))
+    panel._evo_matrix_combo.setCurrentIndex(panel._evo_matrix_combo.findData("history"))
+    panel._evo_time_combo.setCurrentIndex(panel._evo_time_combo.findData("time"))
+    panel._evo_value_combo.setCurrentIndex(panel._evo_value_combo.findData("x"))
+    panel._update_run_slider(reset_to_current=False)
+    panel._evo_run_slider.setValue(0)
+    panel.refresh()
+
+    figure = panel.current_figure()
+    assert panel._evo_run_label.text() == "D=2"
+    assert figure.layout.title.text == "D=2"
+    assert list(figure.data[0].x) == [100.0, 200.0, 300.0, 400.0]
+    assert list(figure.data[0].y) == [21.0, 22.0, 23.0, 24.0]

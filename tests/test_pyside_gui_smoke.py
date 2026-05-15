@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QElapsedTimer
 from PySide6.QtCore import QModelIndex
 from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QMouseEvent, QTextCursor
 from PySide6.QtTest import QTest
 
 from main import configure_desktop_graphics
@@ -406,6 +406,26 @@ def test_checkable_combo_emits_when_item_added_checked():
     assert calls == ["changed"]
 
 
+def test_checkable_combo_opens_when_summary_field_is_clicked(monkeypatch):
+    _app()
+    combo = CheckableComboBox()
+    calls: list[str] = []
+    monkeypatch.setattr(combo, "showPopup", lambda: calls.append("show"))
+
+    event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        combo.lineEdit().rect().center(),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+    handled = combo.eventFilter(combo.lineEdit(), event)
+
+    assert handled is True
+    assert calls == ["show"]
+
+
 def test_sidebar_uses_example_combo_and_updates_preview():
     _app()
     tab = NotebookTab()
@@ -653,15 +673,17 @@ def test_notebook_fonts_are_larger_than_old_defaults():
     assert "font-size: 15px" in tab.cells[0].styleSheet()
 
 
-def test_variables_panel_summarizes_large_arrays():
+def test_variables_panel_hides_arrays():
     _app()
     tab = NotebookTab()
-    tab.execution_engine.execute("import numpy as np\nu = np.arange(50)")
+    tab.execution_engine.execute("import numpy as np\nu = np.arange(50)\nanswer = 42")
     tab._refresh_variables_panel()
 
     variables_text = tab.variables_browser.toPlainText()
-    assert "u" in variables_text
-    assert "shape=(50,)" in variables_text
+    assert "answer" in variables_text
+    assert "42" in variables_text
+    assert "u" not in variables_text
+    assert "shape=(50,)" not in variables_text
 
 
 def test_configure_desktop_graphics_sets_software_rendering():

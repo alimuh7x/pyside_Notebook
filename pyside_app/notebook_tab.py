@@ -26,6 +26,7 @@ from pyside_app.execution_engine import ExecutionEngine, ExecutionResult
 from pyside_app.execution_worker import ExecutionWorker
 from pyside_app.graph_state import NotebookGraphState
 from pyside_app.notebook_components import (
+    ExamplesBar,
     GraphPanelWidget,
     HelpPanelsWidget,
     NotebookColumnsWidget,
@@ -187,16 +188,9 @@ class NotebookTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        self.workspace_scroll = QScrollArea(self)
-        self.workspace_scroll.setWidgetResizable(True)
-        self.workspace_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.workspace_scroll.setStyleSheet("QScrollArea { background:#f0f4f8; border:none; }")
-        print("[debug][notebook-tab] init:workspace_scroll enabled=True", flush=True)
-        root.addWidget(self.workspace_scroll)
-
-        self.workspace_content = QWidget(self.workspace_scroll)
+        self.workspace_content = QWidget(self)
         self.workspace_content.setStyleSheet("background:#f0f4f8;")
-        self.workspace_scroll.setWidget(self.workspace_content)
+        root.addWidget(self.workspace_content)
 
         workspace_layout = QVBoxLayout(self.workspace_content)
         workspace_layout.setContentsMargins(12, 12, 12, 12)
@@ -309,10 +303,6 @@ class NotebookTab(QWidget):
         print("[debug][notebook-tab] handle_toolbar_autosave", flush=True)
         self.autosave_now(self.autosave_path)
 
-    def _handle_sidebar_insert_example(self) -> None:
-        print("[debug][notebook-tab] handle_sidebar_insert_example", flush=True)
-        self.insert_example()
-
     def _build_execution_controller(self) -> ExecutionController:
         print("[debug][notebook-tab] build_execution_controller", flush=True)
         return ExecutionController(
@@ -412,37 +402,30 @@ class NotebookTab(QWidget):
                 return
 
     def _build_sidebar(self) -> QWidget:
-        """Build the examples and variables sidebar shown beside the notebook."""
+        """Build the sidebar with examples row and variables panel."""
         print("[debug][notebook-tab] build_sidebar", flush=True)
         self.sidebar_widget = SidebarWidget(
-            examples=self.examples,
-            combo_style=_NB_GRAPH_COMBO_SS,
             text_style=_NB_TEXT_SS,
             heading_style=_NB_HEADING_SS,
             namespace_skip=self._namespace_skip,
+            combo_style=_NB_GRAPH_COMBO_SS,
             summarize_value=self._summarize_namespace_value,
             parent=self,
         )
-        self.sidebar_widget.example_insert_requested.connect(self._handle_sidebar_insert_example)
-        self.example_preview       = self.sidebar_widget.example_preview
-        self.example_combo         = self.sidebar_widget.example_combo
-        self.insert_example_button = self.sidebar_widget.insert_example_button
-        self.variables_panel       = self.sidebar_widget.variables_panel
-        self.variables_browser     = self.sidebar_widget.variables_browser
+        self.variables_panel   = self.sidebar_widget.variables_panel
+        self.variables_browser = self.sidebar_widget.variables_browser
+        self.examples_bar      = self.sidebar_widget.examples_bar
+        self.examples_bar.set_examples(self.examples)
+        self.examples_bar.insert_example_requested.connect(self.insert_example)
+        self.example_combo = self.examples_bar.example_combo
         return self.sidebar_widget
-
-    def _update_example_preview(self) -> None:
-        """Refresh the example preview panel for the currently selected example."""
-        if hasattr(self, "sidebar_widget"):
-            print("[debug][notebook-tab] update_example_preview delegate", flush=True)
-            self.sidebar_widget._update_example_preview()
 
     def _reload_examples_list(self, select_title: str | None = None) -> None:
         """Reload example metadata from disk and optionally reselect one example."""
         print(f"[debug][notebook-tab] reload_examples_list select_title={select_title!r}", flush=True)
         self.examples = get_desktop_notebook_examples()
-        if hasattr(self, "sidebar_widget"):
-            self.sidebar_widget.set_examples(self.examples, select_title)
+        if hasattr(self, "examples_bar"):
+            self.examples_bar.set_examples(self.examples, select_title)
 
     def _functions_reference_html(self) -> str:
         """Return the HTML used in the notebook functions help panel."""
@@ -476,7 +459,7 @@ class NotebookTab(QWidget):
         print("[debug][notebook-tab] toggle_markdown_help delegate", flush=True)
         self.help_panels_container.toggle_markdown_help()
 
-    def _build_column(self, column: str, title: str) -> tuple[QWidget, QVBoxLayout]:
+    def _build_column(self, column: str, title: str) -> tuple[QScrollArea, QVBoxLayout]:
         """Build the main notebook cell column container and its action header."""
         print(f"[debug][notebook-tab] build_column column={column!r} title={title!r}", flush=True)
         self.columns_widget = NotebookColumnsWidget(
@@ -487,7 +470,13 @@ class NotebookTab(QWidget):
         self.columns_widget.add_markdown_requested.connect(self.add_markdown_cell)
         self.columns_widget.insert_example_requested.connect(self.insert_example)
         self.left_container = self.columns_widget.container
-        return self.columns_widget, self.columns_widget.cells_layout
+
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { background:#ffffff; border:none; }")
+        scroll.setWidget(self.columns_widget)
+        return scroll, self.columns_widget.cells_layout
 
     def _build_variables_panel(self, parent: QWidget | None = None) -> QWidget:
         """Build the sidebar panel that displays live namespace variables."""
@@ -495,11 +484,18 @@ class NotebookTab(QWidget):
         return self.sidebar_widget.variables_panel
 
     def _build_graphs_panel(self) -> QWidget:
-        """Build the notebook-side graph preview panel."""
+        """Build the right column graph scroll area."""
         print("[debug][notebook-tab] build_graphs_panel:graph_panel_widget", flush=True)
         self.graph_panel_widget = GraphPanelWidget(self)
         self.quick_preview_panel = self.graph_panel_widget.quick_preview_panel
-        return self.graph_panel_widget
+
+        graph_scroll = QScrollArea(self)
+        graph_scroll.setWidgetResizable(True)
+        graph_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        graph_scroll.setStyleSheet("QScrollArea { background:#f8faff; border:none; }")
+        graph_scroll.setWidget(self.graph_panel_widget)
+
+        return graph_scroll
 
     def _summarize_namespace_value(self, value: object) -> tuple[str, str]:
         """Convert one namespace value into a compact sidebar summary and type name."""
@@ -587,6 +583,7 @@ class NotebookTab(QWidget):
             f"[debug][notebook-tab] create_cell cell_type={cell_type!r} column={column!r} uri={document_uri!r}",
             flush=True,
         )
+        rerun_fn = self._make_rerun_fn() if cell_type == "code" else None
         cell = NotebookCellWidget(
             cell_type,
             source,
@@ -599,11 +596,70 @@ class NotebookTab(QWidget):
             self.move_cell,
             self.move_cell_to_column,
             self,
+            rerun_fn=rerun_fn,
         )
         if cell_type == "code" and isinstance(cell.editor, NotebookCodeEditor):
             cell.editor.document_uri = self._document_uri_for_cell(cell.cell_id)
             cell.editor.attach_lsp_client(self.lsp_client, cell.editor.document_uri)
         return cell
+
+    def _make_rerun_fn(self):
+        """Build a rerun callback for parameter exploration in a code cell."""
+        from pyside_app.execution_worker import OverrideWorker
+        engine = self.execution_engine
+        thread_pool = self.thread_pool
+        graph_panel = self.graph_panel_widget
+
+        _active_workers: list = []
+        _prev_overrides: dict = {}  # tracks previous slider positions for diff labelling
+
+        def _vals_equal(a, b) -> bool:
+            try:
+                return abs(float(a) - float(b)) < 1e-9
+            except (TypeError, ValueError):
+                return a == b
+
+        def rerun_fn(source: str, overrides: dict, on_result) -> None:
+            nonlocal _prev_overrides
+            worker = OverrideWorker(engine, source, overrides)
+            _active_workers.append(worker)
+            _captured_overrides = dict(overrides)
+
+            # Seed prev from source defaults on the very first call so even
+            # the first slider move only shows what actually changed.
+            if not _prev_overrides:
+                from pyside_app.execution_engine import detect_cell_parameters
+                _prev_overrides = {k: spec["value"] for k, spec in detect_cell_parameters(source).items()}
+            _captured_prev = dict(_prev_overrides)
+            _prev_overrides = dict(overrides)
+
+            def _on_result_and_graph(result) -> None:
+                on_result(result)
+                if result.namespace_snapshot:
+                    changed = {
+                        k: v for k, v in _captured_overrides.items()
+                        if k not in _captured_prev or not _vals_equal(_captured_prev[k], v)
+                    } or _captured_overrides
+                    label = "  ".join(
+                        f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}"
+                        for k, v in changed.items()
+                    )
+                    # Persist to temp files
+                    from pyside_app import array_store
+                    array_store.store_run(result.namespace_snapshot, label)
+                    # add_run demotes current to history and makes new snapshot current
+                    graph_panel.add_run(result.namespace_snapshot, label)
+                # Forward plotly output to the graph panel latest-plot slot
+                for output in result.outputs:
+                    if output.kind == "plotly":
+                        graph_panel.set_latest_plot("", output.data.get("html", ""))
+                        break
+
+            worker.signals.finished.connect(_on_result_and_graph)
+            worker.signals.finished.connect(lambda _r, w=worker: _active_workers.remove(w) if w in _active_workers else None)
+            thread_pool.start(worker)
+
+        return rerun_fn
 
     def add_code_cell(self, column: str = "left", source: str = "") -> None:
         """Append a new code cell to the notebook."""

@@ -106,6 +106,41 @@ def build_functions_reference_html() -> str:
                 ("Useful constants", "Predefined physical constants are also available.", "Example: <code>g_n</code>, <code>R_gas</code>, <code>k_B</code>, <code>N_A</code>, <code>atm</code>"),
             ],
         ),
+        (
+            "Interactive &amp; Animation",
+            [
+                (
+                    "interact(fn, param=(min, max, step), …)",
+                    "Render a slider panel that re-runs <code>fn</code> on every drag. "
+                    "Pass ranges as <code>(min, max)</code> or <code>(min, max, step)</code>. "
+                    "Pass a list for a dropdown. The function must return a Plotly figure or a value.",
+                    "Example:<br><code>def plot(E=200e9, nu=0.3):<br>&nbsp;&nbsp;return go.Figure(…)<br>"
+                    "interact(plot, E=(70e9, 210e9, 1e9), nu=(0.1, 0.5, 0.01))</code>",
+                ),
+                (
+                    "animate_frames(x, y_list, labels=None, …)",
+                    "Create an animated Plotly figure from a list of y-data arrays. "
+                    "Adds Play/Pause buttons and a frame slider automatically.",
+                    "Example: <code>animate_frames(x, [y0, y1, y2], labels=['t=0','t=1','t=2'])</code>",
+                ),
+                (
+                    "make_subplots(rows, cols, …)",
+                    "Create a multi-panel Plotly figure (from <code>plotly.subplots</code>).",
+                    "Example: <code>fig = make_subplots(rows=2, cols=1)<br>"
+                    "fig.add_trace(go.Scatter(…), row=1, col=1)</code>",
+                ),
+                (
+                    "quiver(x, y, u, v, …)",
+                    "Create a quiver / vector-field plot (from <code>plotly.figure_factory</code>).",
+                    "Example: <code>fig = quiver(X.ravel(), Y.ravel(), U.ravel(), V.ravel())</code>",
+                ),
+                (
+                    "ureg, Q_(value, unit)",
+                    "Pint unit registry — attach physical units to values and catch dimensional errors.",
+                    "Example: <code>E = Q_(210, 'GPa'); sigma = E * Q_(0.001, '')  # gives Pa</code>",
+                ),
+            ],
+        ),
     ]
 
     section_html = []

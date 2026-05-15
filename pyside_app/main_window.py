@@ -3,6 +3,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QGraphicsDropShadowEffect, QMainWindow, QTabWidget, QVBoxLayout, QWidget
 
+from pyside_app.fft_tab import FFTTab
+from pyside_app.formula_plot_tab import FormulaPlotTab
 from pyside_app.graph_state import NotebookGraphState
 from pyside_app.graphs_tab import GraphsTab
 from pyside_app.notebook_tab import NotebookTab
@@ -64,8 +66,12 @@ class MainWindow(QMainWindow):
         self.workspace_tabs = QTabWidget(self.content_widget)
         self.notebook_tab = NotebookTab(self.workspace_tabs, graph_state=self.graph_state)
         self.graphs_tab = GraphsTab(self.graph_state, self.workspace_tabs)
+        self.formula_tab = FormulaPlotTab(self.workspace_tabs)
+        self.fft_tab = FFTTab(graph_state=self.graph_state, parent=self.workspace_tabs)
         self.workspace_tabs.addTab(self.notebook_tab, "Notebook")
         self.workspace_tabs.addTab(self.graphs_tab, "Graphs")
+        self.workspace_tabs.addTab(self.formula_tab, "Formula Plot")
+        self.workspace_tabs.addTab(self.fft_tab, "FFT Analysis")
         self.content_layout.addWidget(self.workspace_tabs)
         surface_layout.addWidget(self.content_widget, 1)
 

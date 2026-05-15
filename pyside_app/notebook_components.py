@@ -113,76 +113,40 @@ class NotebookToolbar(QWidget):
 #-------------------------------------------------------------------------------------------------------------------------
 
 class SidebarWidget(QFrame):
-    """Sidebar widget containing examples and the live variables browser."""
-
-    example_insert_requested = Signal()
+    """Sidebar showing only the live variables browser."""
 
     def __init__(
         self,
-        examples: Sequence[object],
-        combo_style: str,
         text_style: str,
         heading_style: str,
         namespace_skip: set[str],
         summarize_value: Callable[[object], tuple[str, str]],
+        combo_style: str = "",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         print("[debug][sidebar-widget] init:start", flush=True)
-        self.examples = list(examples)
         self._namespace_skip = namespace_skip
         self._summarize_value = summarize_value
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet(
             "QFrame { background:#ffffff; border:1px solid #d1dce8; }"
             "QLabel { background:transparent; border:none; " + text_style + " }"
-            "QPushButton { font-size:12px; font-weight:400; }"
         )
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setSpacing(6)
 
-        title = QLabel("Notebook Sidebar", self)
-        title.setStyleSheet(heading_style)
-        layout.addWidget(title)
-
-        self.example_preview = QTextBrowser(self)
-        self.example_preview.setMinimumHeight(180)
-        self.example_preview.setMaximumHeight(220)
-        self.example_preview.setStyleSheet("font-size:12px; line-height:1.5; color:#355070;")
-        layout.addWidget(self.example_preview)
-
-        examples_label = QLabel("Examples", self)
-        examples_label.setStyleSheet(heading_style)
-        layout.addWidget(examples_label)
-
-        self.example_combo = AutoCloseComboBox(self)
-        self.example_combo.setStyleSheet(combo_style)
-        print("[debug][sidebar-widget] example_combo style=graph_panel_combo", flush=True)
-        self.example_combo.currentIndexChanged.connect(self._update_example_preview)
-        layout.addWidget(self.example_combo)
-
-        self.insert_example_button = self._toolbar_button(
-            "Insert Example",
-            self.example_insert_requested.emit,
-            "QPushButton { background:#001f41; color:white; border-radius:6px; padding:5px 12px; font-weight:600; } "
-            "QPushButton:hover { background:#0d3567; }",
-        )
-        layout.addWidget(self.insert_example_button)
+        self.examples_bar = self._build_examples_row(combo_style)
+        layout.addWidget(self.examples_bar)
 
         self.variables_panel = self._build_variables_panel(heading_style)
         layout.addWidget(self.variables_panel, 1)
-        layout.addStretch(1)
-
-        self._reload_examples_list()
         print("[debug][sidebar-widget] init:done", flush=True)
 
-    def _toolbar_button(self, label: str, handler: object, style: str) -> QPushButton:
-        print(f"[debug][sidebar-widget] toolbar_button label={label!r}", flush=True)
-        button = QPushButton(label, self)
-        button.setStyleSheet(style + " QPushButton { font-size:12px; font-weight:400; }")
-        button.clicked.connect(handler)
-        return button
+    def _build_examples_row(self, combo_style: str) -> "ExamplesBar":
+        bar = ExamplesBar(combo_style=combo_style, parent=self)
+        return bar
 
     def _build_variables_panel(self, heading_style: str) -> QWidget:
         print("[debug][sidebar-widget] build_variables_panel", flush=True)
@@ -204,8 +168,9 @@ class SidebarWidget(QFrame):
             "QTextBrowser {"
             " border:1px solid #d1dce8;"
             " background:#ffffff;"
-            " font-size:12px;"
-            " color:#355070;"
+            " font-family:'Segoe UI', 'Roboto Condensed', Arial, sans-serif;"
+            " font-size:14px;"
+            " color:#0f1b2b;"
             "}"
         )
         self.variables_browser.document().setDocumentMargin(8)
@@ -213,75 +178,96 @@ class SidebarWidget(QFrame):
         self._refresh_variables_panel({})
         return wrapper
 
-    def _update_example_preview(self) -> None:
-        if not hasattr(self, "example_combo"):
-            return
-        title = self.example_combo.currentText().strip()
-        example = next((item for item in self.examples if getattr(item, "title", "") == title), None)
-        if example is None:
-            return
-        print(f"[debug][sidebar-widget] update_example_preview title={title!r}", flush=True)
-        tags = ", ".join(example.tags)
-        self.example_preview.setHtml(
-            f"<h3>{example.title}</h3>"
-            f"<p><b>Category:</b> {example.category or 'general'}</p>"
-            f"<p>{example.description}</p>"
-            f"<p><b>Tags:</b> {tags}</p>"
-        )
-
-    def _reload_examples_list(self, select_title: str | None = None) -> None:
-        print(f"[debug][sidebar-widget] reload_examples_list select_title={select_title!r}", flush=True)
-        self.example_combo.blockSignals(True)
-        self.example_combo.clear()
-        selected_index = 0
-        for index, example in enumerate(self.examples):
-            self.example_combo.addItem(example.title, example.id)
-            if select_title and example.title == select_title:
-                selected_index = index
-        self.example_combo.blockSignals(False)
-        if self.example_combo.count():
-            self.example_combo.setCurrentIndex(selected_index)
-        self._update_example_preview()
-
-    def set_examples(self, examples: Sequence[object], select_title: str | None = None) -> None:
-        print(f"[debug][sidebar-widget] set_examples count={len(examples)}", flush=True)
-        self.examples = list(examples)
-        self._reload_examples_list(select_title)
-
     def _refresh_variables_panel(self, namespace: dict[str, object]) -> None:
         print("[debug][sidebar-widget] refresh_variables_panel", flush=True)
         print(f"[debug][sidebar-widget] refresh_variables_panel_namespace count={len(namespace)}", flush=True)
-        rows: list[tuple[str, str, str]] = []
+        rows: list[tuple[str, str]] = []
         for name, value in sorted(namespace.items()):
             if name in self._namespace_skip or name.startswith("_"):
                 continue
             if isinstance(value, ModuleType) or callable(value):
                 continue
-            summary, type_name = self._summarize_value(value)
-            rows.append((name, summary, type_name))
+            if isinstance(value, (np.ndarray, pd.DataFrame, pd.Series)):
+                continue
+            summary, _type_name = self._summarize_value(value)
+            rows.append((name, summary))
         print(f"[debug][sidebar-widget] refresh_variables_panel rows={len(rows)}", flush=True)
         if not rows:
             self.variables_browser.setHtml("<p style='color:#64748b; font-style:italic;'>Run code to see variables here.</p>")
             return
+
         table_rows = "".join(
             "<tr>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #e2e8f0;'><code>{html.escape(name)}</code></td>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #e2e8f0;'>{html.escape(summary)}</td>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #e2e8f0; color:#64748b;'>{html.escape(type_name)}</td>"
+            f"<td style='padding:4px 7px; border-bottom:1px solid #e2e8f0; white-space:nowrap; vertical-align:top; line-height:1.1;'>"
+            f"<code style='font-family:Consolas, monospace; color:#001f41; font-size:14px; font-weight:700;'>{html.escape(name)}</code></td>"
+            f"<td style='padding:4px 7px; border-bottom:1px solid #e2e8f0; font-family:Consolas, monospace; font-size:14px; color:#001f41; font-weight:700; line-height:1.1;'>{html.escape(summary)}</td>"
             "</tr>"
-            for name, summary, type_name in rows
+            for name, summary in rows
         )
         self.variables_browser.setHtml(
-            "<table style='width:100%; border-collapse:collapse;'>"
+            "<table style='width:100%; border-collapse:collapse; font-family:Segoe UI, Arial, sans-serif; font-size:14px;'>"
             "<thead>"
             "<tr>"
-            "<th style='text-align:left; padding:6px 8px; border-bottom:2px solid #d1dce8;'>Variable</th>"
-            "<th style='text-align:left; padding:6px 8px; border-bottom:2px solid #d1dce8;'>Value</th>"
-            "<th style='text-align:left; padding:6px 8px; border-bottom:2px solid #d1dce8;'>Type</th>"
+            "<th style='text-align:left; padding:5px 7px; border-bottom:2px solid #d1dce8; color:#001f41; font-size:14px; font-weight:700; line-height:1.1;'>Variable</th>"
+            "<th style='text-align:left; padding:5px 7px; border-bottom:2px solid #d1dce8; color:#001f41; font-size:14px; font-weight:700; line-height:1.1;'>Value</th>"
             "</tr>"
             "</thead>"
             f"<tbody>{table_rows}</tbody></table>"
         )
+
+#-------------------------------------------------------------------------------------------------------------------------
+# -- Note: ExamplesBar
+#-------------------------------------------------------------------------------------------------------------------------
+
+class ExamplesBar(QWidget):
+    """Compact top-right bar: example dropdown + Insert button."""
+
+    insert_example_requested = Signal()
+
+    def __init__(
+        self,
+        combo_style: str,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.examples: list[object] = []
+        self.setStyleSheet("background:#f0f4f8;")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(8)
+
+        lbl = QLabel("Examples", self)
+        lbl.setStyleSheet("font-weight:700; font-size:12px; color:#001f41; background:transparent;")
+        layout.addWidget(lbl)
+
+        self.example_combo = AutoCloseComboBox(self)
+        self.example_combo.setStyleSheet(combo_style)
+        self.example_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        layout.addWidget(self.example_combo, 1)
+
+        self.insert_btn = QPushButton("Insert Example", self)
+        self.insert_btn.setStyleSheet(
+            "QPushButton { background:#001f41; color:white; border-radius:6px; padding:5px 14px;"
+            " font-weight:600; font-size:12px; min-height:26px; }"
+            "QPushButton:hover { background:#0d3567; }"
+        )
+        self.insert_btn.clicked.connect(self.insert_example_requested.emit)
+        layout.addWidget(self.insert_btn)
+
+    def set_examples(self, examples: Sequence[object], select_title: str | None = None) -> None:
+        self.examples = list(examples)
+        self.example_combo.blockSignals(True)
+        self.example_combo.clear()
+        selected_index = 0
+        for i, ex in enumerate(self.examples):
+            self.example_combo.addItem(ex.title, ex.id)  # type: ignore[attr-defined]
+            if select_title and ex.title == select_title:  # type: ignore[attr-defined]
+                selected_index = i
+        self.example_combo.blockSignals(False)
+        if self.example_combo.count():
+            self.example_combo.setCurrentIndex(selected_index)
+
 
 #-------------------------------------------------------------------------------------------------------------------------
 # -- Note: HelpPanelsWidget
@@ -368,14 +354,6 @@ class NotebookColumnsWidget(QWidget):
                 "QPushButton:hover { background:#cbd5e1; }",
             )
         )
-        header.addWidget(
-            self._toolbar_button(
-                "Insert Example",
-                self._request_insert_example,
-                "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:4px 10px; } "
-                "QPushButton:hover { background:#cbd5e1; }",
-            )
-        )
         wrapper_layout.addLayout(header)
 
         self.container = QWidget(self)
@@ -420,21 +398,149 @@ class NotebookColumnsWidget(QWidget):
 
 
 class GraphPanelWidget(QWidget):
-    """Thin wrapper around the notebook quick graph preview panel."""
+    """Right-column graph container: holds one or more QuickGraphPreviewPanel cards."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         print("[debug][graph-panel-widget] init:start", flush=True)
+        self._namespace: dict[str, Any] = {}
+        self._current_label = "baseline"
+        self._panels: list[QuickGraphPreviewPanel] = []
+        self._cards: list[QWidget] = []
+
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(0)
-        self.quick_preview_panel = QuickGraphPreviewPanel(self)
-        root.addWidget(self.quick_preview_panel)
+
+        # ── toolbar: "Add Graph Panel" ────────────────────────────────────────
+        toolbar = QHBoxLayout()
+        toolbar.setContentsMargins(0, 0, 0, 6)
+        toolbar.addStretch(1)
+        add_btn = QPushButton("+ Add Graph Panel", self)
+        add_btn.setStyleSheet(
+            "QPushButton { background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;"
+            " border-radius:6px; padding:4px 12px; font-weight:600; font-size:12px; }"
+            "QPushButton:hover { background:#dbeafe; }"
+        )
+        add_btn.clicked.connect(self._add_panel)
+        toolbar.addWidget(add_btn)
+        root.addLayout(toolbar)
+
+        # ── panels ────────────────────────────────────────────────────────────
+        self._panels_layout = QVBoxLayout()
+        self._panels_layout.setContentsMargins(0, 0, 0, 0)
+        self._panels_layout.setSpacing(10)
+        root.addLayout(self._panels_layout)
+        root.addStretch(1)
+
+        self._add_panel()
+        self.quick_preview_panel = self._panels[0]   # backward compat
         print("[debug][graph-panel-widget] init:done", flush=True)
+
+    # ── internal ──────────────────────────────────────────────────────────────
+
+    def _add_panel(self) -> None:
+        n = len(self._panels) + 1
+        panel = QuickGraphPreviewPanel(self)
+        if self._namespace:
+            panel.set_namespace(self._namespace)
+            panel.set_current_label(self._current_label)
+            panel.load_saved_runs_from_store()
+
+        # ── card wrapper ──────────────────────────────────────────────────────
+        card = QFrame(self)
+        card.setFrameShape(QFrame.Shape.StyledPanel)
+        card.setStyleSheet(
+            "QFrame { background:#ffffff; border:1px solid #d1dce8; border-radius:8px; }"
+        )
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.setSpacing(0)
+
+        # header
+        hdr = QWidget(card)
+        hdr.setStyleSheet(
+            "QWidget { background:#f0f4f8; border-bottom:1px solid #d1dce8;"
+            " border-top-left-radius:8px; border-top-right-radius:8px; border-bottom:none; }"
+            "QLabel { background:transparent; border:none; }"
+            "QPushButton { background:transparent; border:none; }"
+        )
+        hdr_layout = QHBoxLayout(hdr)
+        hdr_layout.setContentsMargins(10, 4, 6, 4)
+        hdr_layout.setSpacing(6)
+
+        title_lbl = QLabel(f"Graph Panel {n}", hdr)
+        title_lbl.setStyleSheet("font-weight:700; font-size:12px; color:#001f41; background:transparent; border:none;")
+        hdr_layout.addWidget(title_lbl)
+        hdr_layout.addStretch(1)
+
+        remove_btn = QPushButton("✕", hdr)
+        remove_btn.setFixedSize(20, 20)
+        remove_btn.setStyleSheet(
+            "QPushButton { color:#64748b; font-size:11px; font-weight:700; background:transparent; border:none; }"
+            "QPushButton:hover { color:#dc2626; }"
+        )
+        remove_btn.clicked.connect(lambda: self._remove_panel(card, panel))
+        hdr_layout.addWidget(remove_btn)
+        card_layout.addWidget(hdr)
+
+        # panel body
+        card_layout.addWidget(panel)
+
+        self._panels_layout.addWidget(card)
+        self._panels.append(panel)
+        self._cards.append(card)
+        self._update_remove_buttons()
+
+    def _remove_panel(self, card: QWidget, panel: "QuickGraphPreviewPanel") -> None:
+        if len(self._panels) <= 1:
+            return
+        idx = self._panels.index(panel)
+        self._panels.pop(idx)
+        self._cards.pop(idx)
+        card.hide()
+        card.deleteLater()
+        self.quick_preview_panel = self._panels[0]
+        self._update_remove_buttons()
+        self._renumber_panels()
+
+    def _update_remove_buttons(self) -> None:
+        only_one = len(self._cards) <= 1
+        for card in self._cards:
+            hdr = card.layout().itemAt(0).widget()
+            if hdr:
+                btn = hdr.findChild(QPushButton)
+                if btn:
+                    btn.setEnabled(not only_one)
+
+    def _renumber_panels(self) -> None:
+        for i, card in enumerate(self._cards):
+            hdr = card.layout().itemAt(0).widget()
+            if hdr:
+                lbl = hdr.findChild(QLabel)
+                if lbl:
+                    lbl.setText(f"Graph Panel {i + 1}")
+
+    # ── public API ────────────────────────────────────────────────────────────
 
     def set_namespace(self, namespace: dict[str, Any]) -> None:
         print(f"[debug][graph-panel-widget] set_namespace count={len(namespace)}", flush=True)
-        self.quick_preview_panel.set_namespace(namespace)
+        self._namespace = namespace
+        self._current_label = "baseline"
+        for panel in self._panels:
+            panel.set_namespace(namespace)
+
+    def add_run(self, namespace_snapshot: dict[str, Any], label: str) -> None:
+        """Record a slider run in all panels for history trace overlay."""
+        self._namespace = dict(namespace_snapshot)
+        self._current_label = label or "current"
+        for panel in self._panels:
+            panel.add_run(namespace_snapshot, label)
+
+    def clear_history(self) -> None:
+        """Clear run history from all panels. Called on kernel restart."""
+        for panel in self._panels:
+            panel.clear_history()
 
     def set_latest_plot(self, title: str, html_value: str) -> None:
         print(
@@ -444,16 +550,42 @@ class GraphPanelWidget(QWidget):
         self.quick_preview_panel.set_latest_plot(title, html_value)
 
 
+def _fmt_scalar(v: float) -> str:
+    """Format a scalar value compactly."""
+    if abs(v) >= 1e4 or (abs(v) < 1e-3 and v != 0.0):
+        return f"{v:.3g}"
+    return f"{v:.4g}"
+
+
 def summarize_namespace_value(value: object) -> tuple[str, str]:
-    """Return a compact summary for one namespace value."""
+    """Return a rich summary for one namespace value."""
     if isinstance(value, np.ndarray):
-        shape = value.shape
-        summary = f"shape={shape}"
-        if value.ndim == 1:
-            summary += f" len={value.size}"
+        dtype_name = str(value.dtype)
+        shape_str = "×".join(str(d) for d in value.shape) if value.ndim > 0 else "scalar"
+        if value.size == 0:
+            return f"[empty] shape=({shape_str}) dtype={dtype_name}", "ndarray"
+        try:
+            flat = value.ravel().astype(float)
+            mn, mx, mean = float(flat.min()), float(flat.max()), float(flat.mean())
+            stats = f"min={_fmt_scalar(mn)}  max={_fmt_scalar(mx)}  mean={_fmt_scalar(mean)}"
+        except Exception:
+            stats = ""
+        summary = f"({shape_str}) {dtype_name}"
+        if stats:
+            summary += f"  ·  {stats}"
         return summary, "ndarray"
     if isinstance(value, pd.DataFrame):
-        return f"DataFrame shape={value.shape}", "DataFrame"
+        rows, cols = value.shape
+        col_names = ", ".join(str(c) for c in value.columns[:6])
+        if len(value.columns) > 6:
+            col_names += ", …"
+        return f"{rows}×{cols}  [{col_names}]", "DataFrame"
+    if isinstance(value, pd.Series):
+        try:
+            stats = f"min={_fmt_scalar(float(value.min()))}  max={_fmt_scalar(float(value.max()))}"
+        except Exception:
+            stats = ""
+        return f"len={len(value)} dtype={value.dtype}" + (f"  ·  {stats}" if stats else ""), "Series"
     if isinstance(value, (list, tuple)):
         if len(value) <= 6 and all(not isinstance(item, (list, tuple, dict)) for item in value):
             return repr(value), type(value).__name__
@@ -466,8 +598,15 @@ def summarize_namespace_value(value: object) -> tuple[str, str]:
         return f"dict keys={len(keys)}", "dict"
     if isinstance(value, str):
         return (value if len(value) <= 40 else value[:37] + "..."), "str"
-    if isinstance(value, (int, float, complex, bool)):
-        return str(value), type(value).__name__
+    if isinstance(value, complex):
+        return str(value), "complex"
+    if isinstance(value, bool):
+        return str(value), "bool"
+    if isinstance(value, int):
+        return str(value), "int"
+    if isinstance(value, float):
+        return _fmt_scalar(value), "float"
     if isinstance(value, go.Figure):
-        return "Plotly Figure", "plot"
+        n_traces = len(value.data)
+        return f"Plotly Figure  {n_traces} trace{'s' if n_traces != 1 else ''}", "plot"
     return type(value).__name__, type(value).__name__

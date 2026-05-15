@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, Qt, Signal
+from PySide6.QtCore import QEvent, QModelIndex, QObject, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QWidget
 
 _COMBO_POPUP_STYLE = (
@@ -55,6 +55,7 @@ class CheckableComboBox(QComboBox):
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setPlaceholderText("Select Y variable(s)")
+        self.lineEdit().installEventFilter(self)
         self.view().setMouseTracking(True)
         self.view().viewport().setMouseTracking(True)
         self.view().setStyleSheet(_COMBO_POPUP_STYLE)
@@ -62,6 +63,14 @@ class CheckableComboBox(QComboBox):
         print("[debug][checkable-combo] mouse_tracking enabled=True", flush=True)
         self.view().clicked.connect(self._toggle_clicked_item)
         self._update_display_text()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        """Open the checklist when the read-only summary field is clicked."""
+        if watched is self.lineEdit() and event.type() == QEvent.Type.MouseButtonPress:
+            print("[debug][checkable-combo] line_edit_click show_popup", flush=True)
+            self.showPopup()
+            return True
+        return super().eventFilter(watched, event)
 
     def add_check_item(self, text: str, data: object, checked: bool = False) -> None:
         """Append a checkable item and optionally mark it selected immediately."""

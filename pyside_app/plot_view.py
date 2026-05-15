@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import base64
 import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QSizePolicy
-from PySide6.QtWidgets import QTextBrowser, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QPushButton,
+    QSizePolicy,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
+)
 
 try:
     from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -42,6 +50,25 @@ class PlotView(QWidget):
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
+
+        # Download PNG toolbar
+        self._toolbar = QWidget(self)
+        toolbar_layout = QHBoxLayout(self._toolbar)
+        toolbar_layout.setContentsMargins(0, 2, 4, 2)
+        toolbar_layout.setSpacing(0)
+        toolbar_layout.addStretch(1)
+        self._download_btn = QPushButton("Download PNG", self._toolbar)
+        self._download_btn.setStyleSheet(
+            "QPushButton {"
+            " background:#f1f5f9; color:#334155; border:1px solid #cbd5e1;"
+            " border-radius:5px; padding:3px 10px; font-size:12px; font-weight:600;"
+            "}"
+            "QPushButton:hover { background:#e2e8f0; }"
+        )
+        self._download_btn.clicked.connect(self._download_png)
+        toolbar_layout.addWidget(self._download_btn)
+        self._layout.addWidget(self._toolbar)
+
         if QWebEngineView is not None:
             self._view: QWidget = QWebEngineView(self)
         else:
@@ -73,6 +100,58 @@ class PlotView(QWidget):
         self._cleanup_temp_file()
         super().closeEvent(event)
         print("[debug][plot-view] close_event:done", flush=True)
+
+    def _download_png(self) -> None:
+        """Download the current plot as a PNG file."""
+        print("[debug][plot-view] download_png:start", flush=True)
+        if QWebEngineView is None or not isinstance(self._view, QWebEngineView):
+            self._save_pixmap_png()
+            return
+        js = (
+            "(function(){"
+            "  window.__png_data__ = null;"
+            "  var gd = document.querySelector('.js-plotly-plot');"
+            "  if (!gd) { window.__png_data__ = '__no_plot__'; return; }"
+            "  var w = gd.offsetWidth || 900, h = gd.offsetHeight || 500;"
+            "  Plotly.toImage(gd, {format:'png', width:w, height:h, scale:2})"
+            "    .then(function(url){ window.__png_data__ = url; })"
+            "    .catch(function(){ window.__png_data__ = '__error__'; });"
+            "})();"
+        )
+        self._view.page().runJavaScript(js)
+        QTimer.singleShot(1500, self._read_png_data)
+
+    def _read_png_data(self) -> None:
+        """Read the PNG data URL stored by JS and trigger save."""
+        self._view.page().runJavaScript("window.__png_data__ || ''", self._handle_png_data)
+
+    def _handle_png_data(self, data_url: object) -> None:
+        """Decode the base64 PNG data URL and open a save dialog."""
+        url = str(data_url) if data_url else ""
+        print(f"[debug][plot-view] handle_png_data status={'ok' if url.startswith('data:') else url[:30]!r}", flush=True)
+        if not url.startswith("data:image/png;base64,"):
+            self._save_pixmap_png()
+            return
+        b64 = url.split(",", 1)[1]
+        try:
+            png_bytes = base64.b64decode(b64)
+        except Exception:
+            self._save_pixmap_png()
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Save PNG", "graph.png", "PNG Image (*.png)")
+        if not path:
+            return
+        Path(path).write_bytes(png_bytes)
+        print(f"[debug][plot-view] download_png:saved path={path!r}", flush=True)
+
+    def _save_pixmap_png(self) -> None:
+        """Grab the widget as a pixmap and save (fallback when JS is unavailable)."""
+        print("[debug][plot-view] download_png:pixmap_fallback", flush=True)
+        path, _ = QFileDialog.getSaveFileName(self, "Save PNG", "graph.png", "PNG Image (*.png)")
+        if not path:
+            return
+        self._view.grab().save(path, "PNG")
+        print(f"[debug][plot-view] download_png:pixmap_saved path={path!r}", flush=True)
 
     def set_html(self, html: str) -> None:
         """Wrap and display raw plot HTML inside the embedded browser widget."""
