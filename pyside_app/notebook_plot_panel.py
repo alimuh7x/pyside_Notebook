@@ -111,10 +111,11 @@ _CARD_STYLE = """
         font-size:12px; font-weight:400;
     }
     QWidget#graphCard QComboBox QAbstractItemView {
-        selection-background-color:#c7def5; selection-color:#0f1b2b; outline:0;
+        selection-background-color:#dbeafe; selection-color:#1e40af; outline:0;
+        border:1px solid #bfdbfe; border-radius:6px;
     }
     QWidget#graphCard QComboBox QAbstractItemView::item:hover {
-        background:#c7def5; color:#0f1b2b;
+        background:#eff6ff; color:#1d4ed8;
     }
 """
 _TEXT_SS  = "color:#355070; font-weight:400; font-size:12px;"
@@ -1751,10 +1752,8 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         # controls card
         card = QWidget(self)
         card.setStyleSheet(
-            "QWidget { background:#ffffff; border:1px solid #d1dce8; }"
+            "QWidget { background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; }"
             "QLabel { border:none; background:transparent; " + _LBL_SS + " }"
-            "QComboBox, QLineEdit { background:#ffffff; border:1px solid #d1dce8;"
-            " border-radius:6px; padding:4px 6px; }"
         )
         cl = QVBoxLayout(card)
         cl.setContentsMargins(8, 6, 8, 6)
@@ -1898,9 +1897,18 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             f"arrays_1d={list(new_1d)} arrays_2d={list(new_2d)}",
             flush=True,
         )
-        # Demote current arrays to history using the label they were created with.
+        # Demote current arrays to history.  Filter the stored label to only
+        # the keys that appear in the incoming label so we don't show every
+        # param when only one changed (e.g. show "E_alpha=-0.4" not all params).
         if self._arrays_1d:
-            self._run_history.append((self._current_label, {k: v.copy() for k, v in self._arrays_1d.items()}))
+            new_keys = {p.split("=")[0].strip() for p in label.replace("  ", " ").split() if "=" in p}
+            if new_keys:
+                kept = [p for p in self._current_label.split("  ")
+                        if any(p.strip().startswith(k + "=") for k in new_keys)]
+                history_label = "  ".join(kept) if kept else self._current_label
+            else:
+                history_label = self._current_label
+            self._run_history.append((history_label, {k: v.copy() for k, v in self._arrays_1d.items()}))
             if len(self._run_history) > self._MAX_HISTORY:
                 self._run_history.pop(0)
         self._arrays_1d = new_1d
@@ -1918,11 +1926,15 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._clear_hist_btn.hide()
         self.refresh()
 
+    def download_png(self) -> None:
+        """Save the current graph as a PNG file."""
+        self._plot_view._download_png()
+
     def refresh(self) -> None:
         """Rebuild the quick preview, overlaying all historical runs as faded traces."""
         mode = self._mode_combo.currentData() or "series"
         style = {"graph_width": None, "graph_height": 360,
-                 "font_size": 14, "line_width": 2, "marker_size": 8,
+                 "font_size": 14, "line_width": 3, "marker_size": 8,
                  "show_grid": True, "show_box": True,
                  "ticks_inside": True, "show_minor_ticks": True}
 
@@ -1975,7 +1987,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
                 self._figure.update_layout(showlegend=True)
                 cur_lbl = self._current_label[:40] if len(self._current_label) > 40 else self._current_label
                 for trace in self._figure.data:
-                    trace.name = f"▶ {cur_lbl}" if len(y_vars) == 1 else f"▶ {trace.name} | {cur_lbl}"
+                    trace.name = cur_lbl if len(y_vars) == 1 else f"{trace.name} | {cur_lbl}"
 
             # ── overlay historical traces ─────────────────────────────────────
             if has_plot and self._run_history:
@@ -2002,7 +2014,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
                                 x=x_data, y=y_data,
                                 mode="lines" if plot_type == "lines" else "lines+markers",
                                 name=trace_name,
-                                line=dict(color=color, width=2),
+                                line=dict(color=color, width=3),
                                 opacity=opacity,
                                 showlegend=True,
                             )

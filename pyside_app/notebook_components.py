@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -142,6 +142,7 @@ class SidebarWidget(QFrame):
 
         self.variables_panel = self._build_variables_panel(heading_style)
         layout.addWidget(self.variables_panel, 1)
+
         print("[debug][sidebar-widget] init:done", flush=True)
 
     def _build_examples_row(self, combo_style: str) -> "ExamplesBar":
@@ -237,10 +238,6 @@ class ExamplesBar(QWidget):
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(8)
 
-        lbl = QLabel("Examples", self)
-        lbl.setStyleSheet("font-weight:700; font-size:12px; color:#001f41; background:transparent;")
-        layout.addWidget(lbl)
-
         self.example_combo = AutoCloseComboBox(self)
         self.example_combo.setStyleSheet(combo_style)
         self.example_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -259,13 +256,24 @@ class ExamplesBar(QWidget):
         self.examples = list(examples)
         self.example_combo.blockSignals(True)
         self.example_combo.clear()
-        selected_index = 0
+
+        # non-selectable "Examples" header at index 0
+        self.example_combo.addItem("Examples", None)
+        header_item = self.example_combo.model().item(0)
+        if header_item is not None:
+            header_item.setFlags(header_item.flags() & ~Qt.ItemFlag.ItemIsEnabled & ~Qt.ItemFlag.ItemIsSelectable)
+            font = header_item.font()
+            font.setBold(True)
+            header_item.setFont(font)
+
+        selected_index = 1
         for i, ex in enumerate(self.examples):
             self.example_combo.addItem(ex.title, ex.id)  # type: ignore[attr-defined]
             if select_title and ex.title == select_title:  # type: ignore[attr-defined]
-                selected_index = i
+                selected_index = i + 1
+
         self.example_combo.blockSignals(False)
-        if self.example_combo.count():
+        if self.example_combo.count() > 1:
             self.example_combo.setCurrentIndex(selected_index)
 
 
@@ -412,19 +420,14 @@ class GraphPanelWidget(QWidget):
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(0)
 
-        # ── toolbar: "Add Graph Panel" ────────────────────────────────────────
-        toolbar = QHBoxLayout()
-        toolbar.setContentsMargins(0, 0, 0, 6)
-        toolbar.addStretch(1)
-        add_btn = QPushButton("+ Add Graph Panel", self)
-        add_btn.setStyleSheet(
+        # "Add Graph Panel" lives in whichever panel header is current
+        self._add_btn = QPushButton("+ Add Graph Panel", self)
+        self._add_btn.setStyleSheet(
             "QPushButton { background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;"
             " border-radius:6px; padding:4px 12px; font-weight:600; font-size:12px; }"
             "QPushButton:hover { background:#dbeafe; }"
         )
-        add_btn.clicked.connect(self._add_panel)
-        toolbar.addWidget(add_btn)
-        root.addLayout(toolbar)
+        self._add_btn.clicked.connect(self._add_panel)
 
         # ── panels ────────────────────────────────────────────────────────────
         self._panels_layout = QVBoxLayout()
@@ -460,8 +463,8 @@ class GraphPanelWidget(QWidget):
         # header
         hdr = QWidget(card)
         hdr.setStyleSheet(
-            "QWidget { background:#f0f4f8; border-bottom:1px solid #d1dce8;"
-            " border-top-left-radius:8px; border-top-right-radius:8px; border-bottom:none; }"
+            "QWidget { background:#eef4ff; border-bottom:1px solid #bfdbfe;"
+            " border-top-left-radius:8px; border-top-right-radius:8px; }"
             "QLabel { background:transparent; border:none; }"
             "QPushButton { background:transparent; border:none; }"
         )
@@ -470,9 +473,31 @@ class GraphPanelWidget(QWidget):
         hdr_layout.setSpacing(6)
 
         title_lbl = QLabel(f"Graph Panel {n}", hdr)
-        title_lbl.setStyleSheet("font-weight:700; font-size:12px; color:#001f41; background:transparent; border:none;")
+        title_lbl.setStyleSheet("font-weight:700; font-size:12px; color:#1e40af; background:transparent; border:none;")
         hdr_layout.addWidget(title_lbl)
         hdr_layout.addStretch(1)
+
+        _btn_ss = (
+            "QPushButton { font-size:10px; padding:2px 10px; border:1px solid #bfdbfe;"
+            " border-radius:6px; background:#dbeafe; color:#1d4ed8; font-weight:500; }"
+            "QPushButton:hover { background:#bfdbfe; border-color:#93c5fd; }"
+        )
+
+        clear_btn = QPushButton("Clear history", hdr)
+        clear_btn.setFixedHeight(22)
+        clear_btn.setStyleSheet(_btn_ss)
+        clear_btn.clicked.connect(panel.clear_history)
+        hdr_layout.addWidget(clear_btn)
+
+        dl_btn = QPushButton("Download PNG", hdr)
+        dl_btn.setFixedHeight(22)
+        dl_btn.setStyleSheet(_btn_ss)
+        dl_btn.clicked.connect(panel.download_png)
+        hdr_layout.addWidget(dl_btn)
+
+        # migrate "+ Add Graph Panel" into this panel's header
+        self._add_btn.setParent(hdr)
+        hdr_layout.addWidget(self._add_btn)
 
         remove_btn = QPushButton("✕", hdr)
         remove_btn.setFixedSize(20, 20)
@@ -529,6 +554,12 @@ class GraphPanelWidget(QWidget):
         self._current_label = "baseline"
         for panel in self._panels:
             panel.set_namespace(namespace)
+
+    def set_current_label(self, label: str) -> None:
+        """Override the label applied to the current namespace snapshot in all panels."""
+        self._current_label = label or "baseline"
+        for panel in self._panels:
+            panel.set_current_label(self._current_label)
 
     def add_run(self, namespace_snapshot: dict[str, Any], label: str) -> None:
         """Record a slider run in all panels for history trace overlay."""

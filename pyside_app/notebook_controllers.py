@@ -150,10 +150,21 @@ class ExecutionController:
         self.ui.refresh_variables_panel()
         namespace = self.execution_engine.get_namespace()
         self.graph_controller.refresh_graphs_panel(namespace)
-        # Save baseline arrays to temp files (slider runs add their own entries)
         if not result.error:
+            # Label the baseline with actual param values rather than "baseline"
+            from pyside_app.execution_engine import detect_cell_parameters
             from pyside_app import array_store
-            array_store.store_run(namespace, label="baseline")
+            source = cell.source() if callable(getattr(cell, "source", None)) else ""
+            params = detect_cell_parameters(source)
+            if params:
+                store_label = "  ".join(
+                    f"{k}={int(spec['value'])}" if spec.get("is_int") else f"{k}={float(spec['value']):.4g}"
+                    for k, spec in params.items()
+                )
+                self.graph_controller.graph_panel.set_current_label(store_label)
+            else:
+                store_label = "baseline"
+            array_store.store_run(namespace, label=store_label)
             print(f"[debug][execution-controller] arrays saved to {array_store.get_store_dir()}", flush=True)
         self.state.execution.is_running = False
         if result.error:

@@ -6,15 +6,55 @@ from PySide6.QtWidgets import QComboBox, QWidget
 _COMBO_POPUP_STYLE = (
     "QAbstractItemView {"
     " background:#ffffff;"
-    " color:#0f1b2b;"
-    " border:1px solid #d1dce8;"
-    " selection-background-color:#c7def5;"
-    " selection-color:#0f1b2b;"
+    " color:#1e293b;"
+    " border:1px solid #bfdbfe;"
+    " border-radius:6px;"
+    " padding:2px;"
+    " selection-background-color:#dbeafe;"
+    " selection-color:#1e40af;"
     " outline:0;"
     "}"
+    "QAbstractItemView::item {"
+    " padding:4px 8px;"
+    " border-radius:4px;"
+    "}"
     "QAbstractItemView::item:hover {"
-    " background:#dbeafe;"
-    " color:#0f1b2b;"
+    " background:#eff6ff;"
+    " color:#1d4ed8;"
+    "}"
+)
+
+_COMBO_WIDGET_STYLE = (
+    "QComboBox {"
+    " background:#ffffff;"
+    " color:#1e293b;"
+    " border:1px solid #e2e8f0;"
+    " border-radius:7px;"
+    " padding:4px 28px 4px 10px;"
+    " font-size:12px;"
+    "}"
+    "QComboBox:hover {"
+    " border-color:#93c5fd;"
+    " background:#f8faff;"
+    "}"
+    "QComboBox:focus {"
+    " border-color:#2563eb;"
+    "}"
+    "QComboBox::drop-down {"
+    " subcontrol-origin:padding;"
+    " subcontrol-position:right center;"
+    " width:22px;"
+    " border-left:1px solid #e2e8f0;"
+    " border-top-right-radius:7px;"
+    " border-bottom-right-radius:7px;"
+    " background:#f1f5f9;"
+    "}"
+    "QComboBox::down-arrow {"
+    " image:none;"
+    " width:0; height:0;"
+    " border-left:4px solid transparent;"
+    " border-right:4px solid transparent;"
+    " border-top:5px solid #64748b;"
     "}"
 )
 
@@ -26,6 +66,7 @@ class AutoCloseComboBox(QComboBox):
         """Initialize the combo box and style its popup view."""
         super().__init__(parent)
         print("[debug][auto-close-combo] init", flush=True)
+        self.setStyleSheet(_COMBO_WIDGET_STYLE)
         self.view().setMouseTracking(True)
         self.view().viewport().setMouseTracking(True)
         self.view().setStyleSheet(_COMBO_POPUP_STYLE)
@@ -48,27 +89,41 @@ class CheckableComboBox(QComboBox):
 
     checkedItemsChanged = Signal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, placeholder: str = "Select…") -> None:
         """Initialize the checkable popup and readonly summary line edit."""
         super().__init__(parent)
-        print("[debug][checkable-combo] init", flush=True)
+        self._placeholder = placeholder
+        self._suppress_hide = False  # set True during item click to keep popup open
+        self.setStyleSheet(_COMBO_WIDGET_STYLE)
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
-        self.lineEdit().setPlaceholderText("Select Y variable(s)")
+        self.lineEdit().setStyleSheet(
+            "QLineEdit { background:transparent; border:none; padding:0; color:#1e293b; font-size:12px; }"
+        )
         self.lineEdit().installEventFilter(self)
         self.view().setMouseTracking(True)
         self.view().viewport().setMouseTracking(True)
         self.view().setStyleSheet(_COMBO_POPUP_STYLE)
-        print("[debug][checkable-combo] popup_style background='#ffffff' text='#0f1b2b'", flush=True)
-        print("[debug][checkable-combo] mouse_tracking enabled=True", flush=True)
+        # pressed fires before Qt's internal hidePopup — set flag here
+        self.view().pressed.connect(self._on_item_pressed)
         self.view().clicked.connect(self._toggle_clicked_item)
         self._update_display_text()
 
+    def hidePopup(self) -> None:
+        """Keep popup open when the user clicks an item (suppress auto-close)."""
+        if self._suppress_hide:
+            self._suppress_hide = False
+            return
+        super().hidePopup()
+
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        """Open the checklist when the read-only summary field is clicked."""
+        """Toggle popup when the read-only summary field is clicked."""
         if watched is self.lineEdit() and event.type() == QEvent.Type.MouseButtonPress:
-            print("[debug][checkable-combo] line_edit_click show_popup", flush=True)
-            self.showPopup()
+            if self.view().isVisible():
+                super().hidePopup()  # already open — close normally
+            else:
+                self._suppress_hide = True  # absorb the release-triggered hidePopup
+                self.showPopup()
             return True
         return super().eventFilter(watched, event)
 
@@ -119,6 +174,10 @@ class CheckableComboBox(QComboBox):
         super().clear()
         self._update_display_text()
 
+    def _on_item_pressed(self, index: QModelIndex) -> None:
+        """Set suppress flag the moment the user presses on any item."""
+        self._suppress_hide = True
+
     def _toggle_clicked_item(self, index: QModelIndex) -> None:
         """Flip one item's check state without closing the popup."""
         item = self.model().itemFromIndex(index)
@@ -126,10 +185,6 @@ class CheckableComboBox(QComboBox):
             return
         new_state = Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked
         item.setCheckState(new_state)
-        print(
-            f"[debug][checkable-combo] toggle text={item.text()!r} checked={new_state == Qt.CheckState.Checked}",
-            flush=True,
-        )
         self._update_display_text()
         self.checkedItemsChanged.emit()
 
@@ -143,7 +198,7 @@ class CheckableComboBox(QComboBox):
             if item.checkState() == Qt.CheckState.Checked:
                 labels.append(item.text())
         if not labels:
-            summary = "Select Y variable(s)"
+            summary = self._placeholder
         elif len(labels) <= 2:
             summary = ", ".join(labels)
         else:

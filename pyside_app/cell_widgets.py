@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math as _math
 import re
 import uuid
 from typing import Any, Callable
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pyside_app.controls import CheckableComboBox
 from pyside_app.editor_intelligence import NotebookLspClient
 from pyside_app.execution_engine import ExecutionResult, detect_cell_parameters
 from pyside_app.markdown_preview import MarkdownPreview
@@ -405,29 +407,53 @@ class AutoResizeTextBrowser(QTextBrowser):
 class PythonHighlighter(QSyntaxHighlighter):
     """Apply lightweight syntax highlighting rules to Python source text."""
 
+    # (pattern, hex-color, bold, italic)
     RULES = [
-        (
-            r"\b(def|class|return|import|from|as|if|elif|else|for|while|with|try|except|finally|pass|break|continue|and|or|not|in|is|lambda|yield|raise|del|global|nonlocal|True|False|None)\b",
-            QColor("#001f41"),
-            True,
-        ),
-        (r"\b(np|pd|go|scipy|math)\b", QColor("#7c3aed"), False),
-        (r"#[^\n]*", QColor("#94a3b8"), False),
-        (r'"[^"\n]*"|\'[^\'\n]*\'', QColor("#15803d"), False),
-        (r"\b\d+\.?\d*\b", QColor("#b60021"), False),
+        # definition keywords — purple
+        (r"\b(def|class|lambda|global|nonlocal|import|from|as|with)\b",
+         "#a626a4", True, False),
+        # control flow — golden
+        (r"\b(if|elif|else|for|while|try|except|finally|pass|break|continue)\b",
+         "#c18401", True, False),
+        # operators/values — teal
+        (r"\b(return|yield|raise|del|and|or|not|in|is|True|False|None|assert|async|await)\b",
+         "#0184bc", True, False),
+        # self / cls — warm red
+        (r"\b(self|cls)\b", "#e45649", False, False),
+        # built-in functions
+        (r"\b(print|len|range|type|list|dict|int|float|str|bool|tuple|set|frozenset"
+         r"|abs|round|min|max|sum|sorted|reversed|enumerate|zip|map|filter|any|all"
+         r"|open|input|repr|id|hash|dir|vars|getattr|setattr|hasattr|isinstance|issubclass"
+         r"|super|property|staticmethod|classmethod|callable|iter|next)\b",
+         "#4078f2", False, False),
+        # common scientific imports / aliases
+        (r"\b(np|pd|go|plt|sp|scipy|math|os|sys|re|json|copy|time|datetime|pathlib|typing)\b",
+         "#4078f2", False, False),
+        # decorators
+        (r"@[\w\.]+", "#4078f2", False, False),
+        # numbers (int, float, hex, sci notation)
+        (r"\b(0x[0-9a-fA-F]+|\d+\.?\d*(?:[eE][+-]?\d+)?)\b", "#986801", False, False),
+        # double-quoted strings
+        (r'"[^"\n]*"', "#50a14f", False, False),
+        # single-quoted strings
+        (r"'[^'\n]*'", "#50a14f", False, False),
+        # comments — must be last to override everything
+        (r"#[^\n]*", "#9ca3af", False, True),
     ]
-    _COMPILED_RULES: list[tuple[re.Pattern[str], QTextCharFormat]] = []
+    _COMPILED_RULES: list[tuple[re.Pattern[str], QTextCharFormat]] = []  # reset when RULES changes
 
     @classmethod
     def _build_rules(cls) -> list[tuple[re.Pattern[str], QTextCharFormat]]:
         """Compile and cache the regex-based syntax highlighting rules."""
         if cls._COMPILED_RULES:
             return cls._COMPILED_RULES
-        for pattern, color, bold in cls.RULES:
+        for pattern, color, bold, italic in cls.RULES:
             fmt = QTextCharFormat()
-            fmt.setForeground(color)
+            fmt.setForeground(QColor(color))
             if bold:
                 fmt.setFontWeight(QFont.Weight.Bold)
+            if italic:
+                fmt.setFontItalic(True)
             cls._COMPILED_RULES.append((re.compile(pattern), fmt))
         return cls._COMPILED_RULES
 
@@ -490,17 +516,53 @@ class OutputArea(QWidget):
 
 
 _SLIDER_STYLE = (
-    "QSlider::groove:horizontal { height:4px; background:#d1dce8; border-radius:2px; }"
-    "QSlider::handle:horizontal { width:14px; height:14px; margin:-5px 0;"
-    " background:#001f41; border-radius:7px; }"
-    "QSlider::sub-page:horizontal { background:#001f41; border-radius:2px; }"
+    "QSlider::groove:horizontal { height:5px; background:#dde6f0; border-radius:3px; }"
+    "QSlider::handle:horizontal { width:16px; height:16px; margin:-6px 0;"
+    " background:#2563eb; border:2px solid #ffffff; border-radius:8px; }"
+    "QSlider::sub-page:horizontal { background:#2563eb; border-radius:3px; }"
 )
+
+
+def _nice_step(lo: float, hi: float, is_int: bool, max_steps: int = 20) -> float:
+    """Round step up to the nearest 1/2/5 multiple so values land on round numbers.
+
+    Targets ~10 intervals; guarantees at most max_steps intervals.
+    """
+    if is_int:
+        raw = max(1.0, (hi - lo) / max_steps)
+        return float(int(_math.ceil(raw)))
+    span = hi - lo
+    if span <= 0:
+        return 0.1
+    # Start from a target of 10 intervals, round UP to nearest 1/2/5 multiple.
+    raw = span / 10.0
+    exp = _math.floor(_math.log10(raw))
+    m = raw / (10 ** exp)
+    if m <= 1.0:
+        nice = 1.0
+    elif m <= 2.0:
+        nice = 2.0
+    elif m <= 5.0:
+        nice = 5.0
+    else:
+        nice = 10.0
+    step = nice * (10 ** exp)
+    # Clamp to max_steps by bumping to next nice level if needed.
+    while (hi - lo) / step > max_steps:
+        if nice == 1.0:
+            nice = 2.0
+        elif nice == 2.0:
+            nice = 5.0
+        elif nice == 5.0:
+            nice = 10.0
+            exp += 1
+            nice = 1.0
+        step = nice * (10 ** exp)
+    return step
 
 
 class AutoParamPanel(QWidget):
     """Interactive slider panel for exploring code-cell parameters."""
-
-    _STEPS = 200
 
     def __init__(
         self,
@@ -516,127 +578,146 @@ class AutoParamPanel(QWidget):
         self._hidden_params: set[str] = set()
         self._overrides: dict[str, Any] = {n: s["value"] for n, s in params.items()}
         self._sliders: dict[str, tuple[QSlider, QLineEdit]] = {}
+        self._steps: dict[str, float] = {}   # nice step per param
         self._row_widgets: dict[str, QWidget] = {}
-        self._auto_run = True
-
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 4, 0, 4)
         root.setSpacing(4)
 
         # ── header row ────────────────────────────────────────────────────────
+        _hdr_btn_ss = (
+            "QPushButton { font-size:11px; padding:2px 10px; border:1px solid #e2e8f0;"
+            " border-radius:6px; background:#ffffff; color:#475569; }"
+            "QPushButton:hover { background:#f1f5f9; border-color:#cbd5e1; color:#1e293b; }"
+        )
         header_row = QHBoxLayout()
-        header_row.setSpacing(6)
+        header_row.setSpacing(5)
 
-        self._status_lbl = QLabel("", self)
-        self._status_lbl.setStyleSheet("font-size:11px; color:#64748b;")
-        header_row.addWidget(self._status_lbl)
+        # 1. Hide all
+        hide_all_btn = QPushButton("Hide all", self)
+        hide_all_btn.setFixedHeight(22)
+        hide_all_btn.setStyleSheet(_hdr_btn_ss)
+        hide_all_btn.clicked.connect(self._hide_all_parameters)
+        header_row.addWidget(hide_all_btn)
+
+        # 2. Multi-select dropdown for params
+        self._show_param_combo = CheckableComboBox(self, placeholder="Show hidden…")
+        self._show_param_combo.setFixedHeight(24)
+        self._show_param_combo.setMinimumWidth(120)
+        self._show_param_combo.setStyleSheet(
+            "QComboBox { font-size:11px; padding:2px 8px; border:1px solid #e2e8f0;"
+            " border-radius:6px; background:#ffffff; color:#475569; }"
+            "QComboBox:hover { border-color:#cbd5e1; }"
+        )
+        self._show_param_combo.checkedItemsChanged.connect(self._on_show_hidden_changed)
+        header_row.addWidget(self._show_param_combo)
+
         header_row.addStretch(1)
 
-        auto_btn = QPushButton("Auto-run", self)
-        auto_btn.setCheckable(True)
-        auto_btn.setChecked(True)
-        auto_btn.setFixedHeight(22)
-        auto_btn.setStyleSheet(
-            "QPushButton { font-size:11px; padding:1px 7px; border:1px solid #94a3b8;"
-            " border-radius:4px; background:#f8fafc; color:#334155; }"
-            "QPushButton:checked { background:#001f41; color:white; border-color:#001f41; }"
-        )
-        auto_btn.toggled.connect(self._on_auto_toggled)
-        header_row.addWidget(auto_btn)
+        # 3. Reset all (visible only)
+        reset_all_btn = QPushButton("Reset all", self)
+        reset_all_btn.setFixedHeight(22)
+        reset_all_btn.setStyleSheet(_hdr_btn_ss)
+        reset_all_btn.clicked.connect(self._reset_all_parameters)
+        header_row.addWidget(reset_all_btn)
 
+        # 4. Manual run
         run_btn = QPushButton("Run", self)
         run_btn.setFixedHeight(22)
         run_btn.setStyleSheet(
-            "QPushButton { font-size:11px; padding:1px 7px; border:1px solid #94a3b8;"
-            " border-radius:4px; background:#f8fafc; color:#334155; }"
-            "QPushButton:hover { background:#001f41; color:white; }"
+            "QPushButton { font-size:11px; padding:2px 14px; border:none;"
+            " border-radius:6px; background:#16a34a; color:#ffffff; font-weight:600; }"
+            "QPushButton:hover { background:#15803d; }"
         )
         run_btn.clicked.connect(self._run_current_parameters)
         header_row.addWidget(run_btn)
 
-        show_all_btn = QPushButton("Show all", self)
-        show_all_btn.setFixedHeight(22)
-        show_all_btn.setStyleSheet(
-            "QPushButton { font-size:11px; padding:1px 7px; border:1px solid #94a3b8;"
-            " border-radius:4px; background:#f8fafc; color:#334155; }"
-            "QPushButton:hover { background:#001f41; color:white; }"
-        )
-        show_all_btn.clicked.connect(self._show_all_parameters)
-        header_row.addWidget(show_all_btn)
+        # 6. Status label
+        self._status_lbl = QLabel("", self)
+        self._status_lbl.setStyleSheet("font-size:11px; color:#64748b; padding-left:4px;")
+        header_row.addWidget(self._status_lbl)
 
-        self._show_param_combo = QComboBox(self)
-        self._show_param_combo.setFixedHeight(22)
-        self._show_param_combo.setMinimumWidth(100)
-        self._show_param_combo.setStyleSheet(
-            "QComboBox { font-size:11px; padding:1px 5px; border:1px solid #cbd5e1;"
-            " border-radius:4px; background:#ffffff; color:#334155; }"
-        )
-        self._show_param_combo.addItem("Show hidden…")
-        self._show_param_combo.currentIndexChanged.connect(self._on_show_hidden_selected)
-        header_row.addWidget(self._show_param_combo)
         root.addLayout(header_row)
 
         # ── slider rows ───────────────────────────────────────────────────────
+        _btn_ss = (
+            "QPushButton { font-size:16px; font-weight:700; padding:0 6px; border:1px solid #e2e8f0;"
+            " border-radius:6px; background:#ffffff; color:#475569; min-width:28px; }"
+            "QPushButton:hover { background:#dbeafe; border-color:#93c5fd; color:#1d4ed8; }"
+        )
+        _hide_ss = (
+            "QPushButton { font-size:10px; padding:0 5px; border:1px solid #e2e8f0;"
+            " border-radius:5px; background:#ffffff; color:#94a3b8; }"
+            "QPushButton:hover { background:#fef2f2; border-color:#fca5a5; color:#ef4444; }"
+        )
+
         for name, spec in params.items():
+            lo = float(spec["min"])
+            hi = float(spec["max"])
+            cur_val = float(spec["value"])
+            step = _nice_step(lo, hi, bool(spec["is_int"]))
+            self._steps[name] = step
+            n_steps = max(1, min(20, int(round((hi - lo) / step))))
+
             row_w = QWidget(self)
             row_w.setStyleSheet("background:transparent;")
             row = QHBoxLayout(row_w)
             row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(6)
+            row.setSpacing(4)
 
             hide_btn = QPushButton("Hide", row_w)
             hide_btn.setFixedHeight(20)
-            hide_btn.setFixedWidth(36)
-            hide_btn.setStyleSheet(
-                "QPushButton { font-size:10px; padding:0 4px; border:1px solid #cbd5e1;"
-                " border-radius:3px; background:#f8fafc; color:#475569; }"
-                "QPushButton:hover { background:#fee2e2; border-color:#f87171; color:#dc2626; }"
-            )
-            hide_btn.clicked.connect(lambda _checked=False, n=name: self._hide_parameter(n))
+            hide_btn.setFixedWidth(34)
+            hide_btn.setStyleSheet(_hide_ss)
+            hide_btn.clicked.connect(lambda _=False, n=name: self._hide_parameter(n))
             row.addWidget(hide_btn)
 
             lbl = QLabel(name, row_w)
-            lbl.setFixedWidth(120)
-            lbl.setStyleSheet("font-size:12px; color:#334155; font-weight:600;")
+            lbl.setFixedWidth(110)
+            lbl.setStyleSheet("font-size:12px; color:#1e293b; font-weight:600;")
             lbl.setToolTip(name)
             row.addWidget(lbl)
 
-            lo = float(spec["min"])
-            hi = float(spec["max"])
-            cur_val = float(spec["value"])
+            minus_btn = QPushButton("−", row_w)
+            minus_btn.setFixedSize(28, 28)
+            minus_btn.setStyleSheet(_btn_ss)
+            minus_btn.clicked.connect(lambda _=False, n=name: self._step_value(n, -1))
+            row.addWidget(minus_btn)
+
             slider = QSlider(Qt.Orientation.Horizontal, row_w)
-            slider.setRange(0, self._STEPS)
-            slider.setValue(self._slider_position_for_value(cur_val, spec))
+            slider.setRange(0, n_steps)
+            slider.setValue(self._pos_for_value(cur_val, lo, step, n_steps))
             slider.setStyleSheet(_SLIDER_STYLE)
             slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            row.addWidget(slider, 1)
+
+            plus_btn = QPushButton("+", row_w)
+            plus_btn.setFixedSize(28, 28)
+            plus_btn.setStyleSheet(_btn_ss)
+            plus_btn.clicked.connect(lambda _=False, n=name: self._step_value(n, +1))
+            row.addWidget(plus_btn)
 
             val_edit = QLineEdit(row_w)
-            val_edit.setFixedWidth(80)
-            val_edit.setText(self._fmt(cur_val, bool(spec["is_int"])))
+            val_edit.setFixedWidth(72)
+            val_edit.setText(self._fmt(cur_val, bool(spec["is_int"]), step))
             val_edit.setStyleSheet(
-                "QLineEdit { font-family:monospace; font-size:12px; color:#001f41;"
-                " background:#ffffff; border:1px solid #cbd5e1; border-radius:4px; padding:1px 4px; }"
+                "QLineEdit { font-family:monospace; font-size:12px; color:#1e40af;"
+                " background:#f0f6ff; border:1px solid #bfdbfe; border-radius:6px; padding:1px 5px; }"
+                "QLineEdit:focus { background:#ffffff; border-color:#2563eb; }"
             )
 
             slider.valueChanged.connect(
-                lambda v, n=name, ve=val_edit: self._on_value_changed(n, v, ve)
+                lambda v, n=name, ve=val_edit: self._on_slider_moved(n, v, ve)
             )
-            slider.sliderReleased.connect(self._on_released)
             val_edit.editingFinished.connect(
                 lambda n=name, ve=val_edit: self._on_manual_value(n, ve)
             )
-
-            row.addWidget(slider, 1)
             row.addWidget(val_edit)
 
             reset_btn = QPushButton("Reset", row_w)
             reset_btn.setFixedHeight(20)
-            reset_btn.setStyleSheet(
-                "QPushButton { font-size:10px; padding:0 4px; border:1px solid #cbd5e1;"
-                " border-radius:3px; background:#f8fafc; color:#475569; }"
-                "QPushButton:hover { background:#001f41; color:white; }"
-            )
-            reset_btn.clicked.connect(lambda _checked=False, n=name: self._reset_parameter(n))
+            reset_btn.setStyleSheet(_btn_ss)
+            reset_btn.clicked.connect(lambda _=False, n=name: self._reset_parameter(n))
             row.addWidget(reset_btn)
 
             self._sliders[name] = (slider, val_edit)
@@ -648,25 +729,59 @@ class AutoParamPanel(QWidget):
     # ── helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _fmt(value: float, is_int: bool) -> str:
+    def _fmt(value: float, is_int: bool, step: float = 0.0) -> str:
         if is_int:
             return str(int(round(value)))
+        if step > 0:
+            decimals = max(0, -int(_math.floor(_math.log10(step))))
+            text = f"{value:.{decimals}f}"
+            # strip trailing zeros (0.30 → 0.3, 1.00 → 1)
+            if "." in text:
+                text = text.rstrip("0").rstrip(".")
+            return text
         if abs(value) >= 1e4 or (abs(value) < 1e-3 and value != 0.0):
             return f"{value:.3g}"
         return f"{value:.4g}"
 
-    def _slider_position_for_value(self, value: float, spec: dict) -> int:
-        lo, hi = float(spec["min"]), float(spec["max"])
-        if hi == lo:
+    @staticmethod
+    def _pos_for_value(value: float, lo: float, step: float, n_steps: int) -> int:
+        if step <= 0:
             return 0
-        return int(round((value - lo) / (hi - lo) * self._STEPS))
+        return max(0, min(n_steps, int(round((value - lo) / step))))
 
-    def _value_for_slider_position(self, pos: int, spec: dict) -> float:
-        lo, hi = float(spec["min"]), float(spec["max"])
-        raw = lo + (hi - lo) * pos / self._STEPS
+    def _val_for_pos(self, name: str, pos: int) -> float:
+        spec = self._params[name]
+        lo = float(spec["min"])
+        step = self._steps[name]
+        raw = lo + pos * step
         if spec["is_int"]:
             return float(int(round(raw)))
+        # snap to step precision
+        if step > 0:
+            decimals = max(0, -int(_math.floor(_math.log10(step))))
+            return round(raw, decimals)
         return raw
+
+    def _set_value(self, name: str, value: float, *, trigger_run: bool = True) -> None:
+        spec = self._params.get(name)
+        if spec is None:
+            return
+        lo, hi = float(spec["min"]), float(spec["max"])
+        step = self._steps[name]
+        n_steps = self._sliders[name][0].maximum()
+        value = max(lo, min(hi, value))
+        if spec["is_int"]:
+            value = float(int(round(value)))
+        elif step > 0:
+            decimals = max(0, -int(_math.floor(_math.log10(step))))
+            value = round(value, decimals)
+        self._overrides[name] = value
+        slider, val_edit = self._sliders[name]
+        slider.blockSignals(True)
+        slider.setValue(self._pos_for_value(value, lo, step, n_steps))
+        slider.blockSignals(False)
+        val_edit.setText(self._fmt(value, bool(spec["is_int"]), step))
+        _ = trigger_run  # auto-run removed; run is manual only
 
     def update_params(self, params: dict[str, dict[str, Any]], source: str) -> None:
         self._params = dict(params)
@@ -674,83 +789,65 @@ class AutoParamPanel(QWidget):
         for name, spec in params.items():
             if name not in self._sliders:
                 continue
-            slider, val_edit = self._sliders[name]
+            step = self._steps.get(name, _nice_step(float(spec["min"]), float(spec["max"]), bool(spec["is_int"])))
+            self._steps[name] = step
             cur_val = self._overrides.get(name, float(spec["value"]))
-            pos = self._slider_position_for_value(float(cur_val), spec)
-            slider.blockSignals(True)
-            slider.setValue(pos)
-            slider.blockSignals(False)
-            val_edit.setText(self._fmt(float(cur_val), bool(spec["is_int"])))
+            self._set_value(name, float(cur_val), trigger_run=False)
         self._refresh_hidden_combo()
 
     # ── slots ─────────────────────────────────────────────────────────────────
 
-    def _on_auto_toggled(self, checked: bool) -> None:
-        self._auto_run = checked
-
-    def _on_value_changed(self, name: str, pos: int, val_edit: QLineEdit) -> None:
+    def _on_slider_moved(self, name: str, pos: int, val_edit: QLineEdit) -> None:
         spec = self._params.get(name)
         if spec is None:
             return
-        val = self._value_for_slider_position(pos, spec)
+        val = self._val_for_pos(name, pos)
         self._overrides[name] = val
-        val_edit.setText(self._fmt(val, bool(spec["is_int"])))
-        if self._auto_run:
-            self._run_current_parameters()
-
-    def _on_released(self) -> None:
-        if not self._auto_run:
-            self._run_current_parameters()
+        step = self._steps.get(name, 0.0)
+        val_edit.setText(self._fmt(val, bool(spec["is_int"]), step))
 
     def _on_manual_value(self, name: str, val_edit: QLineEdit) -> None:
-        spec = self._params.get(name)
-        if spec is None:
-            return
         try:
             val = float(val_edit.text())
         except ValueError:
             return
-        lo, hi = float(spec["min"]), float(spec["max"])
-        val = max(lo, min(hi, val))
-        if spec["is_int"]:
-            val = float(int(round(val)))
-        self._overrides[name] = val
-        slider, _ = self._sliders[name]
-        slider.blockSignals(True)
-        slider.setValue(self._slider_position_for_value(val, spec))
-        slider.blockSignals(False)
-        val_edit.setText(self._fmt(val, bool(spec["is_int"])))
-        self._run_current_parameters()
+        self._set_value(name, val, trigger_run=True)
 
-    def _on_show_hidden_selected(self, index: int) -> None:
-        if index <= 0:
-            return
-        name = self._show_param_combo.itemData(index)
-        if name:
-            self._show_parameter(name)
-        self._show_param_combo.setCurrentIndex(0)
+    def _step_value(self, name: str, direction: int) -> None:
+        """Move value by one nice step up (+1) or down (-1)."""
+        current = float(self._overrides.get(name, self._params[name]["value"]))
+        step = self._steps.get(name, 1.0)
+        self._set_value(name, current + direction * step, trigger_run=True)
+
+    def _on_show_hidden_changed(self) -> None:
+        checked = set(self._show_param_combo.checked_values())
+        for name in self._params:
+            row = self._row_widgets.get(name)
+            if name in checked and name in self._hidden_params:
+                self._hidden_params.discard(name)
+                self._overrides.setdefault(name, self._params[name]["value"])
+                if row is not None:
+                    row.show()
+            elif name not in checked and name not in self._hidden_params:
+                self._hidden_params.add(name)
+                if row is not None:
+                    row.hide()
+        # do NOT call _refresh_hidden_combo() — it clears the combo while the
+        # popup is open, which closes it and appears to remove the item
 
     def _refresh_hidden_combo(self) -> None:
         self._show_param_combo.blockSignals(True)
-        while self._show_param_combo.count() > 1:
-            self._show_param_combo.removeItem(1)
+        self._show_param_combo.clear()
         for name in self._params:
-            if name in self._hidden_params:
-                self._show_param_combo.addItem(name, name)
-        self._show_param_combo.setEnabled(bool(self._hidden_params))
+            checked = name not in self._hidden_params  # visible → ticked
+            self._show_param_combo.add_check_item(name, name, checked=checked)
         self._show_param_combo.blockSignals(False)
 
     def _reset_parameter(self, name: str) -> None:
         spec = self._params.get(name)
         if spec is None:
             return
-        slider, value_edit = self._sliders[name]
-        position = self._slider_position_for_value(float(spec["value"]), spec)
-        slider.blockSignals(True)
-        slider.setValue(position)
-        slider.blockSignals(False)
-        self._overrides[name] = spec["value"]
-        value_edit.setText(self._fmt(float(spec["value"]), bool(spec["is_int"])))
+        self._set_value(name, float(spec["value"]), trigger_run=False)
         self._status_lbl.setText(f"reset {name}")
 
     def _hide_parameter(self, name: str) -> None:
@@ -766,10 +863,20 @@ class AutoParamPanel(QWidget):
         row = self._row_widgets.get(name)
         if row is not None:
             row.show()
-        if name not in self._overrides:
-            self._overrides[name] = self._params[name]["value"]
+        self._overrides.setdefault(name, self._params[name]["value"])
         self._status_lbl.setText(f"shown {name}")
         self._refresh_hidden_combo()
+
+    def _hide_all_parameters(self) -> None:
+        for name in list(self._params):
+            if name not in self._hidden_params:
+                self._hide_parameter(name)
+
+    def _reset_all_parameters(self) -> None:
+        for name in list(self._params):
+            if name not in self._hidden_params:
+                self._reset_parameter(name)
+        self._status_lbl.setText("reset all")
 
     def _show_all_parameters(self) -> None:
         for name, spec in self._params.items():
@@ -820,20 +927,27 @@ class NotebookCellWidget(QFrame):
         self.on_move = on_move
         self.on_move_column = on_move_column
         self._rerun_fn = rerun_fn
-        self._auto_param_panel: AutoParamPanel | None = None
         self.preview_mode = cell_type == "code" or (cell_type == "markdown" and bool(source.strip()))
         self.last_result: ExecutionResult | None = None
         accent = "#001f41" if cell_type == "code" else "#7c3aed"
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet(
             "QFrame {"
-            " background: #ffffff;"
-            " border: 1px solid #d1dce8;"
+            " background: #fafbff;"
+            " border: 1px solid #dde3ee;"
             f" border-left: 4px solid {accent};"
             " border-radius: 0px 8px 8px 0px;"
             "} "
-            "QWidget { background: #ffffff; } "
-            "QPlainTextEdit { border: none; background: #ffffff; font-family: 'Consolas'; font-size: 15px; color: #0f1b2b; } "
+            "QWidget { background: #fafbff; } "
+            "QPlainTextEdit {"
+            " border: none;"
+            " background: #fafbff;"
+            " font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;"
+            " font-size: 14px;"
+            " color: #383a42;"
+            " line-height: 1.6;"
+            " padding: 4px 2px;"
+            "} "
             "QTextBrowser { border: 1px solid #e2e8f0; background: #f8fbfe; font-size: 14px; color: #475569; }"
         )
 
@@ -970,17 +1084,6 @@ class NotebookCellWidget(QFrame):
         if cell_type in {"markdown", "code"}:
             self.output_area.hide()
         outer.addWidget(self.output_area)
-
-        # param panel container (shown after first run if rerun_fn is set)
-        self._param_panel_container = QWidget(self)
-        self._param_panel_container.setStyleSheet(
-            "QWidget { background:#f8faff; border-top:1px solid #d1dce8; }"
-        )
-        self._param_panel_layout = QVBoxLayout(self._param_panel_container)
-        self._param_panel_layout.setContentsMargins(8, 6, 8, 6)
-        self._param_panel_container.hide()
-        outer.addWidget(self._param_panel_container)
-
         self._sync_column_buttons()
         if self.cell_type == "markdown" and self.preview_mode:
             self._show_markdown_preview()
@@ -1022,22 +1125,8 @@ class NotebookCellWidget(QFrame):
         else:
             self.output_area.set_result(result)
 
-        if self.cell_type == "code" and self._rerun_fn is not None and not result.error:
-            self._refresh_auto_param_panel(result)
-
-    def _refresh_auto_param_panel(self, result: ExecutionResult) -> None:
-        source = self.source()
-        params = detect_cell_parameters(source)
-        if not params:
-            self._param_panel_container.hide()
-            return
-        if self._auto_param_panel is None:
-            self._auto_param_panel = AutoParamPanel(params, self._rerun_fn, source, self._param_panel_container)
-            self._param_panel_layout.addWidget(self._auto_param_panel)
-        else:
-            self._auto_param_panel.update_params(params, source)
-            self._auto_param_panel._source = source
-        self._param_panel_container.show()
+        if self.cell_type == "code" and not result.error and hasattr(self, "_on_run_success"):
+            self._on_run_success(self.source(), result)
 
     def clear_output(self) -> None:
         """Clear all outputs currently associated with this cell."""

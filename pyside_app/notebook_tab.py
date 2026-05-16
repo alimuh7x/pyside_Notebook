@@ -8,6 +8,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
+    QLabel,
     QScrollArea,
     QSplitter,
     QVBoxLayout,
@@ -484,7 +485,7 @@ class NotebookTab(QWidget):
         return self.sidebar_widget.variables_panel
 
     def _build_graphs_panel(self) -> QWidget:
-        """Build the right column graph scroll area."""
+        """Build the right column: param panel on top, graph scroll below."""
         print("[debug][notebook-tab] build_graphs_panel:graph_panel_widget", flush=True)
         self.graph_panel_widget = GraphPanelWidget(self)
         self.quick_preview_panel = self.graph_panel_widget.quick_preview_panel
@@ -495,7 +496,45 @@ class NotebookTab(QWidget):
         graph_scroll.setStyleSheet("QScrollArea { background:#f8faff; border:none; }")
         graph_scroll.setWidget(self.graph_panel_widget)
 
-        return graph_scroll
+        # Wrapper: param section (top) + graph scroll (bottom)
+        wrapper = QWidget(self)
+        wrapper.setStyleSheet("background:#f8faff;")
+        wrapper_layout = QVBoxLayout(wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.setSpacing(0)
+
+        self._param_section = QWidget(wrapper)
+        self._param_section.setStyleSheet(
+            "QWidget { background:#eef2fa; border-bottom:1px solid #d1dce8; }"
+            "QLabel { background:transparent; border:none; }"
+        )
+        ps_layout = QVBoxLayout(self._param_section)
+        ps_layout.setContentsMargins(10, 8, 10, 8)
+        ps_layout.setSpacing(4)
+        ps_hdr = QLabel("Parameters", self._param_section)
+        ps_hdr.setStyleSheet("font-weight:700; font-size:12px; color:#001f41; background:transparent;")
+        ps_layout.addWidget(ps_hdr)
+        self._param_body_layout = ps_layout
+        self._param_current_widget = None
+        self._param_section.hide()
+        wrapper_layout.addWidget(self._param_section)
+        wrapper_layout.addWidget(graph_scroll, 1)
+
+        return wrapper
+
+    def set_param_widget(self, widget) -> None:
+        """Swap the parameter slider panel shown above the graph column."""
+        if self._param_current_widget is not None:
+            self._param_body_layout.removeWidget(self._param_current_widget)
+            self._param_current_widget.setParent(None)
+            self._param_current_widget = None
+        if widget is not None:
+            widget.setParent(self._param_section)
+            self._param_body_layout.addWidget(widget)
+            self._param_current_widget = widget
+            self._param_section.show()
+        else:
+            self._param_section.hide()
 
     def _summarize_namespace_value(self, value: object) -> tuple[str, str]:
         """Convert one namespace value into a compact sidebar summary and type name."""
@@ -583,7 +622,7 @@ class NotebookTab(QWidget):
             f"[debug][notebook-tab] create_cell cell_type={cell_type!r} column={column!r} uri={document_uri!r}",
             flush=True,
         )
-        rerun_fn = self._make_rerun_fn() if cell_type == "code" else None
+        rerun_fn, on_run_success = self._make_rerun_fn() if cell_type == "code" else (None, None)
         cell = NotebookCellWidget(
             cell_type,
             source,
@@ -598,20 +637,26 @@ class NotebookTab(QWidget):
             self,
             rerun_fn=rerun_fn,
         )
+        if on_run_success is not None:
+            cell._on_run_success = on_run_success
         if cell_type == "code" and isinstance(cell.editor, NotebookCodeEditor):
             cell.editor.document_uri = self._document_uri_for_cell(cell.cell_id)
             cell.editor.attach_lsp_client(self.lsp_client, cell.editor.document_uri)
         return cell
 
     def _make_rerun_fn(self):
-        """Build a rerun callback for parameter exploration in a code cell."""
+        """Build a rerun callback and initial-run hook for parameter exploration."""
         from pyside_app.execution_worker import OverrideWorker
+        from pyside_app.cell_widgets import AutoParamPanel
+        from pyside_app.execution_engine import detect_cell_parameters
         engine = self.execution_engine
         thread_pool = self.thread_pool
         graph_panel = self.graph_panel_widget
+        tab = self  # for set_param_widget
 
         _active_workers: list = []
-        _prev_overrides: dict = {}  # tracks previous slider positions for diff labelling
+        _prev_overrides: dict = {}
+        _panel_ref: list[AutoParamPanel | None] = [None]
 
         def _vals_equal(a, b) -> bool:
             try:
@@ -619,23 +664,37 @@ class NotebookTab(QWidget):
             except (TypeError, ValueError):
                 return a == b
 
+        def _ensure_panel(source: str) -> None:
+            params = detect_cell_parameters(source)
+            if params:
+                if _panel_ref[0] is None:
+                    _panel_ref[0] = AutoParamPanel(params, rerun_fn, source)
+                    tab.set_param_widget(_panel_ref[0])
+                else:
+                    _panel_ref[0].update_params(params, source)
+            else:
+                tab.set_param_widget(None)
+                _panel_ref[0] = None
+
+        def on_run_success(source: str, result) -> None:
+            """Called after the main Run Cell completes to create the slider panel."""
+            _ensure_panel(source)
+
         def rerun_fn(source: str, overrides: dict, on_result) -> None:
             nonlocal _prev_overrides
             worker = OverrideWorker(engine, source, overrides)
             _active_workers.append(worker)
             _captured_overrides = dict(overrides)
+            _captured_source = source
 
-            # Seed prev from source defaults on the very first call so even
-            # the first slider move only shows what actually changed.
             if not _prev_overrides:
-                from pyside_app.execution_engine import detect_cell_parameters
                 _prev_overrides = {k: spec["value"] for k, spec in detect_cell_parameters(source).items()}
             _captured_prev = dict(_prev_overrides)
             _prev_overrides = dict(overrides)
 
             def _on_result_and_graph(result) -> None:
                 on_result(result)
-                if result.namespace_snapshot:
+                if result.namespace_snapshot and not result.error:
                     changed = {
                         k: v for k, v in _captured_overrides.items()
                         if k not in _captured_prev or not _vals_equal(_captured_prev[k], v)
@@ -644,12 +703,11 @@ class NotebookTab(QWidget):
                         f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}"
                         for k, v in changed.items()
                     )
-                    # Persist to temp files
                     from pyside_app import array_store
                     array_store.store_run(result.namespace_snapshot, label)
-                    # add_run demotes current to history and makes new snapshot current
                     graph_panel.add_run(result.namespace_snapshot, label)
-                # Forward plotly output to the graph panel latest-plot slot
+                    _ensure_panel(_captured_source)
+
                 for output in result.outputs:
                     if output.kind == "plotly":
                         graph_panel.set_latest_plot("", output.data.get("html", ""))
@@ -659,7 +717,7 @@ class NotebookTab(QWidget):
             worker.signals.finished.connect(lambda _r, w=worker: _active_workers.remove(w) if w in _active_workers else None)
             thread_pool.start(worker)
 
-        return rerun_fn
+        return rerun_fn, on_run_success
 
     def add_code_cell(self, column: str = "left", source: str = "") -> None:
         """Append a new code cell to the notebook."""
