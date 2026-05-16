@@ -12,8 +12,9 @@ from pyside_app.main_window import MainWindow
 GLOBAL_STYLESHEET = """
 QWidget {
     color: #0f1b2b;
-    font-family: 'Segoe UI', 'Inter', sans-serif;
-    font-size: 15px;
+    font-family: 'Inter', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
 }
 QMainWindow, QTabWidget::pane, QTabWidget {
     background: #f0f4f8;
@@ -62,8 +63,8 @@ QPushButton:hover {
 QLabel {
     color: #0f1b2b;
 }
-QTextBrowser, QListWidget, QPlainTextEdit {
-    font-size: 15px;
+QTextBrowser, QListWidget {
+    font-size: 17px;
 }
 """
 

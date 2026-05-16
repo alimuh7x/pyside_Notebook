@@ -23,11 +23,11 @@ class GraphsTab(QWidget):
         self.scroll = QScrollArea(self)
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(self.scroll.horizontalScrollBarPolicy().ScrollBarAlwaysOff)
-        self.scroll.setStyleSheet("QScrollArea { background:#f0f4f8; border:none; }")
+        self.scroll.setStyleSheet("QScrollArea { background:#21252b; border:none; }")
         root.addWidget(self.scroll)
 
         container = QWidget(self.scroll)
-        container.setStyleSheet("background:#f0f4f8;")
+        container.setStyleSheet("background:#21252b;")
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         container_layout = QVBoxLayout(container)
         container_layout.setContentsMargins(12, 12, 12, 12)

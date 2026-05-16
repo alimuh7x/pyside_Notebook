@@ -60,10 +60,10 @@ class PlotView(QWidget):
         self._download_btn = QPushButton("Download PNG", self._toolbar)
         self._download_btn.setStyleSheet(
             "QPushButton {"
-            " background:#f1f5f9; color:#334155; border:1px solid #cbd5e1;"
-            " border-radius:5px; padding:3px 10px; font-size:12px; font-weight:600;"
+            " background:#3e4451; color:#d7dae0; border:1px solid #4a5568;"
+            " border-radius:5px; padding:3px 10px; font-size:14px; font-weight:600;"
             "}"
-            "QPushButton:hover { background:#e2e8f0; }"
+            "QPushButton:hover { background:#4a5568; }"
         )
         self._download_btn.clicked.connect(self._download_png)
         toolbar_layout.addWidget(self._download_btn)

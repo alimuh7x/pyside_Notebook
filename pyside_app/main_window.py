@@ -31,8 +31,8 @@ class MainWindow(QMainWindow):
         self.window_surface.setObjectName("windowSurface")
         self.window_surface.setStyleSheet(
             "QFrame#windowSurface {"
-            " background: #f0f4f8;"
-            " border: 1px solid rgba(15, 23, 42, 0.18);"
+            " background: #21252b;"
+            " border: 1px solid rgba(0,0,0,0.6);"
             " border-radius: 8px;"
             "}"
         )
@@ -53,7 +53,7 @@ class MainWindow(QMainWindow):
         self.content_widget.setObjectName("windowContent")
         self.content_widget.setStyleSheet(
             "QWidget#windowContent {"
-            " background: #f0f4f8;"
+            " background: #21252b;"
             " border-bottom-left-radius: 8px;"
             " border-bottom-right-radius: 8px;"
             "}"
@@ -64,6 +64,13 @@ class MainWindow(QMainWindow):
 
         self.graph_state = NotebookGraphState(self)
         self.workspace_tabs = QTabWidget(self.content_widget)
+        self.workspace_tabs.setStyleSheet(
+            "QTabWidget::pane { background:#21252b; border:none; }"
+            "QTabBar::tab { background:#21252b; color:#5c6370; padding:7px 18px;"
+            " border:none; border-bottom:2px solid transparent; font-size:14px; font-weight:700; }"
+            "QTabBar::tab:selected { color:#d7dae0; border-bottom:2px solid #61afef; }"
+            "QTabBar::tab:hover { color:#d7dae0; background:#282c34; }"
+        )
         self.notebook_tab = NotebookTab(self.workspace_tabs, graph_state=self.graph_state)
         self.graphs_tab = GraphsTab(self.graph_state, self.workspace_tabs)
         self.formula_tab = FormulaPlotTab(self.workspace_tabs)

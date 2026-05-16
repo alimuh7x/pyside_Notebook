@@ -24,25 +24,26 @@ from PySide6.QtWidgets import (
 
 from pyside_app.plot_view import PlotView
 
-_LABEL_SS = "color:#001f41; font-size:12px; font-weight:700;"
-_TEXT_SS = "color:#355070; font-size:12px;"
+_LABEL_SS = "color:#e5c07b; font-size:14px; font-weight:700;"
+_TEXT_SS = "color:#d7dae0; font-size:14px;"
 _BTN_PRIMARY = (
-    "QPushButton { background:#001f41; color:white; border-radius:6px; padding:4px 14px;"
-    " font-weight:600; min-height:28px; } QPushButton:hover { background:#0d3567; }"
+    "QPushButton { background:#2c313a; color:#d7dae0; border-radius:6px; padding:4px 14px;"
+    " font-weight:600; min-height:28px; } QPushButton:hover { background:#3e4451; }"
 )
 _BTN_SECONDARY = (
-    "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:4px 14px;"
-    " min-height:28px; } QPushButton:hover { background:#cbd5e1; }"
+    "QPushButton { background:#3e4451; color:#d7dae0; border-radius:6px; padding:4px 14px;"
+    " min-height:28px; } QPushButton:hover { background:#4a5568; }"
 )
 _COMBO_SS = (
-    "QComboBox { background:#fff; border:1px solid #d1dce8; border-radius:6px;"
-    " padding:4px 8px; font-size:12px; color:#0f1b2b; min-height:28px; }"
-    "QComboBox QAbstractItemView { selection-background-color:#c7def5; color:#0f1b2b; }"
+    "QComboBox { background:#2c313a; border:1px solid #3e4451; border-radius:6px;"
+    " padding:4px 8px; font-size:14px; color:#d7dae0; min-height:28px; }"
+    "QComboBox QAbstractItemView { background:#2c313a; color:#d7dae0;"
+    " selection-background-color:#3e4451; selection-color:#61afef; }"
 )
 _SLIDER_SS = (
-    "QSlider::groove:horizontal { height:6px; border-radius:3px; background:#cbd5e1; }"
-    "QSlider::sub-page:horizontal { border-radius:3px; background:#001f41; }"
-    "QSlider::handle:horizontal { width:16px; margin:-5px 0; border-radius:8px; background:#b60021; }"
+    "QSlider::groove:horizontal { height:6px; border-radius:3px; background:#3e4451; }"
+    "QSlider::sub-page:horizontal { border-radius:3px; background:#61afef; }"
+    "QSlider::handle:horizontal { width:16px; margin:-5px 0; border-radius:8px; background:#e06c75; }"
 )
 
 
@@ -63,7 +64,7 @@ class FFTTab(QWidget):
         root.setSpacing(8)
 
         title = QLabel("FFT / Spectral Analysis", self)
-        title.setStyleSheet("color:#001f41; font-size:15px; font-weight:700;")
+        title.setStyleSheet("color:#e5c07b; font-size:17px; font-weight:700;")
         root.addWidget(title)
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -72,9 +73,9 @@ class FFTTab(QWidget):
         controls_scroll = QScrollArea()
         controls_scroll.setWidgetResizable(True)
         controls_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        controls_scroll.setStyleSheet("QScrollArea { border:none; background:#f0f4f8; }")
+        controls_scroll.setStyleSheet("QScrollArea { border:none; background:#21252b; }")
         controls_widget = QWidget()
-        controls_widget.setStyleSheet("background:#f0f4f8;")
+        controls_widget.setStyleSheet("background:#21252b;")
         controls_layout = QVBoxLayout(controls_widget)
         controls_layout.setContentsMargins(8, 8, 8, 8)
         controls_layout.setSpacing(12)
@@ -101,8 +102,8 @@ class FFTTab(QWidget):
         self.fs_spin.setDecimals(4)
         self.fs_spin.setSuffix("  Hz")
         self.fs_spin.setStyleSheet(
-            "QDoubleSpinBox { border:1px solid #d1dce8; border-radius:6px; padding:4px 6px;"
-            " font-size:12px; color:#0f1b2b; background:#fff; min-height:28px; }"
+            "QDoubleSpinBox { border:1px solid #3e4451; border-radius:6px; padding:4px 6px;"
+            " font-size:14px; color:#d7dae0; background:#2c313a; min-height:28px; }"
         )
         sig_form.addRow(QLabel("Sample rate:", sig_frame), self.fs_spin)
         sig_frame.layout().addLayout(sig_form)
@@ -151,8 +152,8 @@ class FFTTab(QWidget):
         self.cutoff_low_spin.setValue(100.0)
         self.cutoff_low_spin.setSuffix("  Hz")
         self.cutoff_low_spin.setStyleSheet(
-            "QDoubleSpinBox { border:1px solid #d1dce8; border-radius:6px; padding:4px 6px;"
-            " font-size:12px; color:#0f1b2b; background:#fff; min-height:28px; }"
+            "QDoubleSpinBox { border:1px solid #3e4451; border-radius:6px; padding:4px 6px;"
+            " font-size:14px; color:#d7dae0; background:#2c313a; min-height:28px; }"
         )
         self._cutoff_low_label = QLabel("Cutoff:", filt_frame)
         filt_form.addRow(self._cutoff_low_label, self.cutoff_low_spin)
@@ -162,8 +163,8 @@ class FFTTab(QWidget):
         self.cutoff_high_spin.setValue(500.0)
         self.cutoff_high_spin.setSuffix("  Hz")
         self.cutoff_high_spin.setStyleSheet(
-            "QDoubleSpinBox { border:1px solid #d1dce8; border-radius:6px; padding:4px 6px;"
-            " font-size:12px; color:#0f1b2b; background:#fff; min-height:28px; }"
+            "QDoubleSpinBox { border:1px solid #3e4451; border-radius:6px; padding:4px 6px;"
+            " font-size:14px; color:#d7dae0; background:#2c313a; min-height:28px; }"
         )
         self._cutoff_high_row_label = QLabel("High cutoff:", filt_frame)
         filt_form.addRow(self._cutoff_high_row_label, self.cutoff_high_spin)
@@ -173,8 +174,8 @@ class FFTTab(QWidget):
         self.order_spin.setValue(4)
         self.order_spin.setDecimals(0)
         self.order_spin.setStyleSheet(
-            "QDoubleSpinBox { border:1px solid #d1dce8; border-radius:6px; padding:4px 6px;"
-            " font-size:12px; color:#0f1b2b; background:#fff; min-height:28px; }"
+            "QDoubleSpinBox { border:1px solid #3e4451; border-radius:6px; padding:4px 6px;"
+            " font-size:14px; color:#d7dae0; background:#2c313a; min-height:28px; }"
         )
         filt_form.addRow(QLabel("Order:", filt_frame), self.order_spin)
         filt_frame.layout().addLayout(filt_form)
@@ -198,7 +199,7 @@ class FFTTab(QWidget):
         controls_layout.addWidget(self.status_label)
 
         self.dominant_label = QLabel("", self)
-        self.dominant_label.setStyleSheet("color:#001f41; font-size:11px; font-weight:600;")
+        self.dominant_label.setStyleSheet("color:#001f41; font-size:13px; font-weight:600;")
         self.dominant_label.setWordWrap(True)
         controls_layout.addWidget(self.dominant_label)
 
@@ -233,14 +234,14 @@ class FFTTab(QWidget):
         frame = QFrame(self)
         frame.setFrameShape(QFrame.Shape.StyledPanel)
         frame.setStyleSheet(
-            "QFrame { background:#ffffff; border:1px solid #d1dce8; border-radius:6px; }"
-            "QLabel { background:transparent; border:none; color:#334155; font-size:12px; }"
+            "QFrame { background:#282c34; border:1px solid #3e4451; border-radius:6px; }"
+            "QLabel { background:transparent; border:none; color:#d7dae0; font-size:14px; }"
         )
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(4)
         lbl = QLabel(title, frame)
-        lbl.setStyleSheet("font-weight:700; color:#001f41; font-size:12px; background:transparent; border:none;")
+        lbl.setStyleSheet("font-weight:700; color:#e5c07b; font-size:14px; background:transparent; border:none;")
         layout.addWidget(lbl)
         return frame
 

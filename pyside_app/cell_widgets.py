@@ -89,26 +89,26 @@ class NotebookCodeEditor(AutoResizePlainTextEdit):
         self._completer.popup().setStyleSheet(
             """
             QListView {
-                background:#ffffff;
-                color:#0f1b2b;
-                border:1px solid #d1dce8;
+                background:#2c313a;
+                color:#d7dae0;
+                border:1px solid #3e4451;
                 border-radius:8px;
                 outline:0;
                 padding:4px;
             }
             QListView::item {
-                background:#ffffff;
-                color:#0f1b2b;
+                background:#2c313a;
+                color:#d7dae0;
                 padding:6px 10px;
                 border-radius:4px;
             }
             QListView::item:hover {
-                background:#c7def5;
-                color:#0f1b2b;
+                background:#3e4451;
+                color:#61afef;
             }
             QListView::item:selected {
-                background:#dbeafe;
-                color:#001f41;
+                background:#282c34;
+                color:#61afef;
             }
             """
         )
@@ -407,54 +407,104 @@ class AutoResizeTextBrowser(QTextBrowser):
 class PythonHighlighter(QSyntaxHighlighter):
     """Apply lightweight syntax highlighting rules to Python source text."""
 
-    # (pattern, hex-color, bold, italic)
+    # Atom One Dark palette — (pattern, hex-color, bold, italic)
     RULES = [
         # definition keywords — purple
         (r"\b(def|class|lambda|global|nonlocal|import|from|as|with)\b",
-         "#a626a4", True, False),
-        # control flow — golden
+         "#c678dd", True, False),
+        # control flow — golden yellow
         (r"\b(if|elif|else|for|while|try|except|finally|pass|break|continue)\b",
-         "#c18401", True, False),
-        # operators/values — teal
+         "#e5c07b", True, False),
+        # special values / return / boolean keywords — cyan
         (r"\b(return|yield|raise|del|and|or|not|in|is|True|False|None|assert|async|await)\b",
-         "#0184bc", True, False),
-        # self / cls — warm red
-        (r"\b(self|cls)\b", "#e45649", False, False),
-        # built-in functions
+         "#56b6c2", True, False),
+        # self / cls — red-pink
+        (r"\b(self|cls)\b", "#e06c75", False, False),
+        # built-in functions — light blue
         (r"\b(print|len|range|type|list|dict|int|float|str|bool|tuple|set|frozenset"
          r"|abs|round|min|max|sum|sorted|reversed|enumerate|zip|map|filter|any|all"
          r"|open|input|repr|id|hash|dir|vars|getattr|setattr|hasattr|isinstance|issubclass"
          r"|super|property|staticmethod|classmethod|callable|iter|next)\b",
-         "#4078f2", False, False),
-        # common scientific imports / aliases
+         "#61afef", False, False),
+        # scientific imports / aliases — light blue
         (r"\b(np|pd|go|plt|sp|scipy|math|os|sys|re|json|copy|time|datetime|pathlib|typing)\b",
-         "#4078f2", False, False),
-        # decorators
-        (r"@[\w\.]+", "#4078f2", False, False),
-        # numbers (int, float, hex, sci notation)
-        (r"\b(0x[0-9a-fA-F]+|\d+\.?\d*(?:[eE][+-]?\d+)?)\b", "#986801", False, False),
-        # double-quoted strings
-        (r'"[^"\n]*"', "#50a14f", False, False),
-        # single-quoted strings
-        (r"'[^'\n]*'", "#50a14f", False, False),
-        # comments — must be last to override everything
-        (r"#[^\n]*", "#9ca3af", False, True),
+         "#61afef", False, False),
+        # decorators — light blue
+        (r"@[\w\.]+", "#61afef", False, False),
+        # numpy array creation — teal (distinct from builtins)
+        (r"\b(zeros|ones|linspace|arange|eye|empty|full|stack|concatenate"
+         r"|vstack|hstack|meshgrid|zeros_like|ones_like|empty_like|full_like"
+         r"|tile|repeat|fromiter|array)\b",
+         "#2bbac5", False, False),
+        # numpy math / signal functions — teal
+        (r"\b(sin|cos|tan|arcsin|arccos|arctan|arctan2|sinh|cosh|tanh"
+         r"|exp|log|log2|log10|sqrt|square|cbrt|sign|floor|ceil"
+         r"|clip|where|argmin|argmax|nanmin|nanmax|nanmean|nanstd|nansum"
+         r"|allclose|isnan|isinf|isfinite|inf|nan|pi|gradient|interp"
+         r"|dot|cross|matmul|cumsum|cumprod|diff|fft|rfft|ifft|argsort|unique)\b",
+         "#2bbac5", False, False),
+        # array / dataframe attributes and methods (after dot) — orange
+        (r"\.(shape|dtype|T|size|ndim|real|imag|flat|nbytes"
+         r"|flatten|reshape|ravel|squeeze|transpose"
+         r"|copy|astype|tolist|item|fill"
+         r"|values|index|columns|iloc|loc|at|iat"
+         r"|mean|std|var|prod|cumsum|cumprod"
+         r"|sort_values|value_counts|nunique|trace|diagonal)\b",
+         "#d19a66", False, False),
+        # identifiers subscripted with [ — array / sequence access — warm teal
+        (r"\b[A-Za-z_]\w*(?=\s*\[)", "#56b6c2", False, False),
+        # assignment-target identifiers (left of any = form) — light green
+        (r"\b[A-Za-z_]\w*(?=\s*(?:\+|-|\*\*?|//|/|%|@|&|\||\^|<<|>>)?=(?!=))",
+         "#98c379", False, False),
+        # augmented assignment operators — yellow (must come before arithmetic rule)
+        (r"\+=|-=|\*\*=|//=|\*=|/=|%=|@=|&=|\|=|\^=", "#e5c07b", False, False),
+        # plain assignment = — yellow (skip ==, !=, <=, >=, and augmented forms)
+        (r"(?<![=!<>+\-\*/%&|^~])=(?!=)", "#e5c07b", False, False),
+        # identifier on the right-hand side of = — green (matches assignment target color)
+        (r"(?<![=!<>+\-\*/%&|^~])=(?!=)\s*([A-Za-z_]\w*)", "#98c379", False, False, True),
+        # arithmetic operators — purple
+        (r"\*\*|//|[+\-\*/%](?!=)", "#c678dd", False, False),
+        # comparison operators — cyan
+        (r"==|!=|<=|>=", "#56b6c2", False, False),
+        # colon: slice, dict, annotation — cyan
+        (r":", "#56b6c2", False, False),
+        # comma separator — muted gold so [save_id, :] reads distinctly
+        (r",", "#e5c07b", False, False),
+        # identifier as first index/arg after [ — colors save_id in phi[save_id, :]
+        (r"\[\s*([A-Za-z_]\w*)", "#d19a66", False, False, True),
+        # identifier after comma — colors each subsequent index/arg
+        (r",\s*([A-Za-z_]\w*)", "#d19a66", False, False, True),
+        # square brackets — vivid purple
+        (r"[\[\]]", "#c678dd", False, False),
+        # parentheses — vivid teal
+        (r"[()]", "#56b6c2", False, False),
+        # curly braces — vivid orange
+        (r"[{}]", "#d19a66", False, False),
+        # numbers (int, float, hex, sci notation) — orange
+        (r"\b(0x[0-9a-fA-F]+|\d+\.?\d*(?:[eE][+-]?\d+)?)\b", "#d19a66", False, False),
+        # strings — green (applied after numpy so strings override false positives)
+        (r'"[^"\n]*"', "#98c379", False, False),
+        (r"'[^'\n]*'", "#98c379", False, False),
+        # comments — dark gray italic, last so they override everything
+        (r"#[^\n]*", "#5c6370", False, True),
     ]
-    _COMPILED_RULES: list[tuple[re.Pattern[str], QTextCharFormat]] = []  # reset when RULES changes
+    _COMPILED_RULES: list[tuple[re.Pattern[str], QTextCharFormat, bool]] = []
 
     @classmethod
-    def _build_rules(cls) -> list[tuple[re.Pattern[str], QTextCharFormat]]:
+    def _build_rules(cls) -> list[tuple[re.Pattern[str], QTextCharFormat, bool]]:
         """Compile and cache the regex-based syntax highlighting rules."""
         if cls._COMPILED_RULES:
             return cls._COMPILED_RULES
-        for pattern, color, bold, italic in cls.RULES:
+        for rule in cls.RULES:
+            pattern, color, bold, italic = rule[:4]
+            use_group = rule[4] if len(rule) > 4 else False
             fmt = QTextCharFormat()
             fmt.setForeground(QColor(color))
             if bold:
                 fmt.setFontWeight(QFont.Weight.Bold)
             if italic:
                 fmt.setFontItalic(True)
-            cls._COMPILED_RULES.append((re.compile(pattern), fmt))
+            cls._COMPILED_RULES.append((re.compile(pattern), fmt, use_group))
         return cls._COMPILED_RULES
 
     def __init__(self, document: Any) -> None:
@@ -464,9 +514,13 @@ class PythonHighlighter(QSyntaxHighlighter):
 
     def highlightBlock(self, text: str) -> None:
         """Apply all configured highlighting rules to one text block."""
-        for pattern, fmt in self._rules:
+        for pattern, fmt, use_group in self._rules:
             for match in pattern.finditer(text):
-                self.setFormat(match.start(), match.end() - match.start(), fmt)
+                if use_group and match.lastindex:
+                    start, end = match.start(1), match.end(1)
+                else:
+                    start, end = match.start(), match.end()
+                self.setFormat(start, end - start, fmt)
 
 
 class OutputArea(QWidget):
@@ -516,10 +570,10 @@ class OutputArea(QWidget):
 
 
 _SLIDER_STYLE = (
-    "QSlider::groove:horizontal { height:5px; background:#dde6f0; border-radius:3px; }"
+    "QSlider::groove:horizontal { height:5px; background:#3e4451; border-radius:3px; }"
     "QSlider::handle:horizontal { width:16px; height:16px; margin:-6px 0;"
-    " background:#2563eb; border:2px solid #ffffff; border-radius:8px; }"
-    "QSlider::sub-page:horizontal { background:#2563eb; border-radius:3px; }"
+    " background:#61afef; border:2px solid #21252b; border-radius:8px; }"
+    "QSlider::sub-page:horizontal { background:#61afef; border-radius:3px; }"
 )
 
 
@@ -586,9 +640,9 @@ class AutoParamPanel(QWidget):
 
         # ── header row ────────────────────────────────────────────────────────
         _hdr_btn_ss = (
-            "QPushButton { font-size:11px; padding:2px 10px; border:1px solid #e2e8f0;"
-            " border-radius:6px; background:#ffffff; color:#475569; }"
-            "QPushButton:hover { background:#f1f5f9; border-color:#cbd5e1; color:#1e293b; }"
+            "QPushButton { font-size:13px; padding:2px 10px; border:1px solid #3e4451;"
+            " border-radius:6px; background:#2c313a; color:#d7dae0; }"
+            "QPushButton:hover { background:#3e4451; border-color:#4a5568; color:#d7dae0; }"
         )
         header_row = QHBoxLayout()
         header_row.setSpacing(5)
@@ -603,11 +657,11 @@ class AutoParamPanel(QWidget):
         # 2. Multi-select dropdown for params
         self._show_param_combo = CheckableComboBox(self, placeholder="Show hidden…")
         self._show_param_combo.setFixedHeight(24)
-        self._show_param_combo.setMinimumWidth(120)
+        self._show_param_combo.setMinimumWidth(200)
         self._show_param_combo.setStyleSheet(
-            "QComboBox { font-size:11px; padding:2px 8px; border:1px solid #e2e8f0;"
-            " border-radius:6px; background:#ffffff; color:#475569; }"
-            "QComboBox:hover { border-color:#cbd5e1; }"
+            "QComboBox { font-size:13px; padding:2px 8px; border:1px solid #3e4451;"
+            " border-radius:6px; background:#2c313a; color:#d7dae0; }"
+            "QComboBox:hover { border-color:#61afef; }"
         )
         self._show_param_combo.checkedItemsChanged.connect(self._on_show_hidden_changed)
         header_row.addWidget(self._show_param_combo)
@@ -625,7 +679,7 @@ class AutoParamPanel(QWidget):
         run_btn = QPushButton("Run", self)
         run_btn.setFixedHeight(22)
         run_btn.setStyleSheet(
-            "QPushButton { font-size:11px; padding:2px 14px; border:none;"
+            "QPushButton { font-size:13px; padding:2px 14px; border:none;"
             " border-radius:6px; background:#16a34a; color:#ffffff; font-weight:600; }"
             "QPushButton:hover { background:#15803d; }"
         )
@@ -634,21 +688,21 @@ class AutoParamPanel(QWidget):
 
         # 6. Status label
         self._status_lbl = QLabel("", self)
-        self._status_lbl.setStyleSheet("font-size:11px; color:#64748b; padding-left:4px;")
+        self._status_lbl.setStyleSheet("font-size:13px; color:#5c6370; padding-left:4px;")
         header_row.addWidget(self._status_lbl)
 
         root.addLayout(header_row)
 
         # ── slider rows ───────────────────────────────────────────────────────
         _btn_ss = (
-            "QPushButton { font-size:16px; font-weight:700; padding:0 6px; border:1px solid #e2e8f0;"
-            " border-radius:6px; background:#ffffff; color:#475569; min-width:28px; }"
-            "QPushButton:hover { background:#dbeafe; border-color:#93c5fd; color:#1d4ed8; }"
+            "QPushButton { font-size:16px; font-weight:700; padding:0 6px; border:1px solid #3e4451;"
+            " border-radius:6px; background:#2c313a; color:#d7dae0; min-width:28px; }"
+            "QPushButton:hover { background:#1d4ed8; border-color:#1d4ed8; color:#ffffff; }"
         )
         _hide_ss = (
-            "QPushButton { font-size:10px; padding:0 5px; border:1px solid #e2e8f0;"
-            " border-radius:5px; background:#ffffff; color:#94a3b8; }"
-            "QPushButton:hover { background:#fef2f2; border-color:#fca5a5; color:#ef4444; }"
+            "QPushButton { font-size:12px; padding:0 5px; border:1px solid #3e4451;"
+            " border-radius:5px; background:#2c313a; color:#5c6370; }"
+            "QPushButton:hover { background:#2d1f1f; border-color:#e06c75; color:#e06c75; }"
         )
 
         for name, spec in params.items():
@@ -674,7 +728,7 @@ class AutoParamPanel(QWidget):
 
             lbl = QLabel(name, row_w)
             lbl.setFixedWidth(110)
-            lbl.setStyleSheet("font-size:12px; color:#1e293b; font-weight:600;")
+            lbl.setStyleSheet("font-size:15px; color:#d7dae0; font-weight:600;")
             lbl.setToolTip(name)
             row.addWidget(lbl)
 
@@ -701,9 +755,9 @@ class AutoParamPanel(QWidget):
             val_edit.setFixedWidth(72)
             val_edit.setText(self._fmt(cur_val, bool(spec["is_int"]), step))
             val_edit.setStyleSheet(
-                "QLineEdit { font-family:monospace; font-size:12px; color:#1e40af;"
-                " background:#f0f6ff; border:1px solid #bfdbfe; border-radius:6px; padding:1px 5px; }"
-                "QLineEdit:focus { background:#ffffff; border-color:#2563eb; }"
+                "QLineEdit { font-family:monospace; font-size:15px; font-weight:700; color:#61afef;"
+                " background:#2c313a; border:1px solid #3e4451; border-radius:6px; padding:1px 5px; }"
+                "QLineEdit:focus { background:#282c34; border-color:#61afef; }"
             )
 
             slider.valueChanged.connect(
@@ -723,6 +777,9 @@ class AutoParamPanel(QWidget):
             self._sliders[name] = (slider, val_edit)
             self._row_widgets[name] = row_w
             root.addWidget(row_w)
+            # hidden by default
+            self._hidden_params.add(name)
+            row_w.hide()
 
         self._refresh_hidden_combo()
 
@@ -929,26 +986,25 @@ class NotebookCellWidget(QFrame):
         self._rerun_fn = rerun_fn
         self.preview_mode = cell_type == "code" or (cell_type == "markdown" and bool(source.strip()))
         self.last_result: ExecutionResult | None = None
-        accent = "#001f41" if cell_type == "code" else "#7c3aed"
+        accent = "#61afef" if cell_type == "code" else "#c678dd"
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet(
             "QFrame {"
-            " background: #fafbff;"
-            " border: 1px solid #dde3ee;"
+            " background: #282c34;"
+            " border: 1px solid #3e4451;"
             f" border-left: 4px solid {accent};"
             " border-radius: 0px 8px 8px 0px;"
             "} "
-            "QWidget { background: #fafbff; } "
+            "QWidget { background: #282c34; } "
             "QPlainTextEdit {"
             " border: none;"
-            " background: #fafbff;"
+            " background: #282c34;"
             " font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;"
             " font-size: 14px;"
-            " color: #383a42;"
-            " line-height: 1.6;"
-            " padding: 4px 2px;"
+            " color: #d7dae0;"
+            " padding: 6px 4px;"
             "} "
-            "QTextBrowser { border: 1px solid #e2e8f0; background: #f8fbfe; font-size: 14px; color: #475569; }"
+            "QTextBrowser { border: 1px solid #3e4451; background: #21252b; font-size: 14px; color: #d7dae0; }"
         )
 
         outer = QVBoxLayout(self)
@@ -980,67 +1036,48 @@ class NotebookCellWidget(QFrame):
             self.run_btn = QPushButton("Run Cell", self)
             self.run_btn.setStyleSheet(
                 "QPushButton {"
-                " background:#001f41; color:white; border:none; border-radius:5px; padding:3px 10px; font-weight:600;"
+                " background:#1e3d28; color:#98c379; border:1px solid #2d5a3d; border-radius:5px; padding:3px 10px; font-weight:600; font-size:11px;"
                 "} "
-                "QPushButton:hover { background:#0d3567; }"
+                "QPushButton:hover { background:#2d5a3d; }"
             )
             self.run_btn.clicked.connect(lambda: self.on_run and self.on_run(self))
             toolbar.addWidget(self.run_btn)
 
-        self.move_up_btn = QPushButton("Up", self)
-        self.move_up_btn.setStyleSheet(
+        _cell_btn_ss = (
             "QPushButton {"
-            " background:#f1f5f9; color:#475569; border:1px solid #d1dce8; border-radius:5px; padding:3px 8px;"
+            " background:#3e4451; color:#d7dae0; border:1px solid #4a5568; border-radius:5px; padding:3px 8px; font-size:11px;"
             "} "
-            "QPushButton:hover { background:#cbd5e1; }"
+            "QPushButton:hover { background:#4a5568; color:#d7dae0; }"
         )
+        self.move_up_btn = QPushButton("Up", self)
+        self.move_up_btn.setStyleSheet(_cell_btn_ss)
         self.move_up_btn.clicked.connect(lambda: self.on_move and self.on_move(self, -1))
         toolbar.addWidget(self.move_up_btn)
         self.move_down_btn = QPushButton("Down", self)
-        self.move_down_btn.setStyleSheet(
-            "QPushButton {"
-            " background:#f1f5f9; color:#475569; border:1px solid #d1dce8; border-radius:5px; padding:3px 8px;"
-            "} "
-            "QPushButton:hover { background:#cbd5e1; }"
-        )
+        self.move_down_btn.setStyleSheet(_cell_btn_ss)
         self.move_down_btn.clicked.connect(lambda: self.on_move and self.on_move(self, 1))
         toolbar.addWidget(self.move_down_btn)
 
         self.move_left_btn = QPushButton("Left", self)
-        self.move_left_btn.setStyleSheet(
-            "QPushButton {"
-            " background:#f1f5f9; color:#475569; border:1px solid #d1dce8; border-radius:5px; padding:3px 8px;"
-            "} "
-            "QPushButton:hover { background:#cbd5e1; }"
-        )
+        self.move_left_btn.setStyleSheet(_cell_btn_ss)
         self.move_left_btn.clicked.connect(lambda: self.on_move_column and self.on_move_column(self, "left"))
         toolbar.addWidget(self.move_left_btn)
         self.move_right_btn = QPushButton("Right", self)
-        self.move_right_btn.setStyleSheet(
-            "QPushButton {"
-            " background:#f1f5f9; color:#475569; border:1px solid #d1dce8; border-radius:5px; padding:3px 8px;"
-            "} "
-            "QPushButton:hover { background:#cbd5e1; }"
-        )
+        self.move_right_btn.setStyleSheet(_cell_btn_ss)
         self.move_right_btn.clicked.connect(lambda: self.on_move_column and self.on_move_column(self, "right"))
         toolbar.addWidget(self.move_right_btn)
 
         self.delete_btn = QPushButton("Delete", self)
         self.delete_btn.setStyleSheet(
             "QPushButton {"
-            " background:rgba(220,38,38,0.12); color:#b91c1c; border:1px solid rgba(220,38,38,0.25); border-radius:5px; padding:3px 8px;"
+            " background:rgba(220,38,38,0.12); color:#e06c75; border:1px solid rgba(220,38,38,0.3); border-radius:5px; padding:3px 8px; font-size:11px;"
             "} "
             "QPushButton:hover { background:#b60021; color:white; }"
         )
         self.delete_btn.clicked.connect(lambda: self.on_delete and self.on_delete(self))
         toolbar.addWidget(self.delete_btn)
         self.clear_btn = QPushButton("Clear Output", self)
-        self.clear_btn.setStyleSheet(
-            "QPushButton {"
-            " background:#f1f5f9; color:#475569; border:1px solid #d1dce8; border-radius:5px; padding:3px 8px;"
-            "} "
-            "QPushButton:hover { background:#cbd5e1; }"
-        )
+        self.clear_btn.setStyleSheet(_cell_btn_ss)
         self.clear_btn.clicked.connect(self.clear_output)
         toolbar.addWidget(self.clear_btn)
         outer.addLayout(toolbar)
@@ -1067,7 +1104,7 @@ class NotebookCellWidget(QFrame):
                 " border-left: 2px solid #e2e8f0;"
                 " background: #f8fbfe;"
                 " color: #475569;"
-                " font-family: 'Roboto Condensed', 'Segoe UI', sans-serif;"
+                " font-family: 'Inter', sans-serif;"
                 " font-size: 14px;"
                 " padding: 4px 8px;"
                 "}"

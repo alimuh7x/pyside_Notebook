@@ -24,18 +24,18 @@ from utils.formula_parser import evaluate_formula, evaluate_formula_2d, extract_
 
 FORMULA_TAB_STYLE = """
 #FormulaPlotTab {
-    background: #f8fafc;
+    background: #21252b;
 }
 #FormulaPlotTab QLineEdit, #FormulaPlotTab QComboBox {
     min-height: 32px;
     padding: 6px 10px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #3e4451;
     border-radius: 7px;
-    background: #ffffff;
-    color: #0f172a;
+    background: #2c313a;
+    color: #d7dae0;
 }
 #FormulaPlotTab QLabel {
-    color: #334155;
+    color: #d7dae0;
 }
 """.strip()
 
@@ -45,18 +45,18 @@ QPushButton {
     padding: 6px 14px;
     border: none;
     border-radius: 8px;
-    background: #001f41;
-    color: white;
+    background: #2c313a;
+    color: #d7dae0;
     font-weight: 600;
 }
 QPushButton:hover {
-    background: #95041a;
+    background: #3e4451;
 }
 """.strip()
 
-FORMULA_STATUS_READY_STYLE = "color: #355070; font-weight: 600; padding: 6px 0;"
-FORMULA_STATUS_UPDATED_STYLE = "color: #15803d; font-weight: 600; padding: 6px 0;"
-FORMULA_STATUS_ERROR_STYLE = "color: #b60021; font-weight: 600; padding: 6px 0;"
+FORMULA_STATUS_READY_STYLE = "color: #d7dae0; font-weight: 600; padding: 6px 0;"
+FORMULA_STATUS_UPDATED_STYLE = "color: #98c379; font-weight: 600; padding: 6px 0;"
+FORMULA_STATUS_ERROR_STYLE = "color: #e06c75; font-weight: 600; padding: 6px 0;"
 
 FORMULA_SLIDER_STYLE = """
 QSlider::groove:horizontal {
@@ -66,7 +66,7 @@ QSlider::groove:horizontal {
 }
 QSlider::sub-page:horizontal {
     border-radius: 3px;
-    background: #001f41;
+    background: #61afef;
 }
 QSlider::handle:horizontal {
     width: 16px;

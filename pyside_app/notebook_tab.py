@@ -46,32 +46,33 @@ from pyside_app.notebook_controllers import (
 from pyside_app.notebook_model import NotebookState
 from pyside_app.storage import NotebookDocument, NotebookStorage
 
-_NB_TEXT_SS = "color:#355070; font-weight:400; font-size:12px;"
-_NB_MUTED_SS = "color:#64748b; font-weight:400; font-size:12px;"
-_NB_HEADING_SS = "color:#001f41; font-weight:700; font-size:12px;"
-_NB_STATUS_READY_SS = "color:#15803d; font-weight:400; font-size:12px;"
-_NB_STATUS_MUTED_SS = "color:#64748b; font-weight:400; font-size:12px;"
-_NB_STATUS_INFO_SS = "color:#2563eb; font-weight:400; font-size:12px;"
-_NB_STATUS_ERROR_SS = "color:#b60021; font-weight:400; font-size:12px;"
+_NB_TEXT_SS = "color:#d7dae0; font-weight:700; font-size:14px;"
+_NB_MUTED_SS = "color:#5c6370; font-weight:700; font-size:14px;"
+_NB_HEADING_SS = "color:#e5c07b; font-weight:700; font-size:14px;"
+_NB_STATUS_READY_SS = "color:#98c379; font-weight:700; font-size:14px;"
+_NB_STATUS_MUTED_SS = "color:#5c6370; font-weight:700; font-size:14px;"
+_NB_STATUS_INFO_SS = "color:#61afef; font-weight:700; font-size:14px;"
+_NB_STATUS_ERROR_SS = "color:#e06c75; font-weight:700; font-size:14px;"
 _NB_GRAPH_COMBO_SS = (
     "QComboBox {"
-    " background:#ffffff;"
-    " border:1px solid #d1dce8;"
+    " background:#2c313a;"
+    " border:1px solid #3e4451;"
     " border-radius:8px;"
     " padding:5px 8px;"
-    " font-size:12px;"
-    " font-weight:400;"
-    " color:#0f1b2b;"
+    " font-size:14px;"
+    " font-weight:700;"
+    " color:#d7dae0;"
     " min-height:32px;"
     "} "
     "QComboBox QAbstractItemView {"
-    " selection-background-color:#c7def5;"
-    " selection-color:#0f1b2b;"
+    " background:#2c313a; color:#d7dae0;"
+    " selection-background-color:#3e4451;"
+    " selection-color:#61afef;"
     " outline:0;"
     "} "
     "QComboBox QAbstractItemView::item:hover {"
-    " background:#c7def5;"
-    " color:#0f1b2b;"
+    " background:#3e4451;"
+    " color:#61afef;"
     "}"
 )
 
@@ -190,7 +191,7 @@ class NotebookTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         self.workspace_content = QWidget(self)
-        self.workspace_content.setStyleSheet("background:#f0f4f8;")
+        self.workspace_content.setStyleSheet("background:#21252b;")
         root.addWidget(self.workspace_content)
 
         workspace_layout = QVBoxLayout(self.workspace_content)
@@ -475,7 +476,7 @@ class NotebookTab(QWidget):
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { background:#ffffff; border:none; }")
+        scroll.setStyleSheet("QScrollArea { background:#282c34; border:none; }")
         scroll.setWidget(self.columns_widget)
         return scroll, self.columns_widget.cells_layout
 
@@ -493,26 +494,26 @@ class NotebookTab(QWidget):
         graph_scroll = QScrollArea(self)
         graph_scroll.setWidgetResizable(True)
         graph_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        graph_scroll.setStyleSheet("QScrollArea { background:#f8faff; border:none; }")
+        graph_scroll.setStyleSheet("QScrollArea { background:#21252b; border:none; }")
         graph_scroll.setWidget(self.graph_panel_widget)
 
         # Wrapper: param section (top) + graph scroll (bottom)
         wrapper = QWidget(self)
-        wrapper.setStyleSheet("background:#f8faff;")
+        wrapper.setStyleSheet("background:#21252b;")
         wrapper_layout = QVBoxLayout(wrapper)
         wrapper_layout.setContentsMargins(0, 0, 0, 0)
         wrapper_layout.setSpacing(0)
 
         self._param_section = QWidget(wrapper)
         self._param_section.setStyleSheet(
-            "QWidget { background:#eef2fa; border-bottom:1px solid #d1dce8; }"
+            "QWidget { background:#2c313a; border-bottom:1px solid #3e4451; }"
             "QLabel { background:transparent; border:none; }"
         )
         ps_layout = QVBoxLayout(self._param_section)
         ps_layout.setContentsMargins(10, 8, 10, 8)
         ps_layout.setSpacing(4)
         ps_hdr = QLabel("Parameters", self._param_section)
-        ps_hdr.setStyleSheet("font-weight:700; font-size:12px; color:#001f41; background:transparent;")
+        ps_hdr.setStyleSheet("font-weight:700; font-size:14px; color:#e5c07b; background:transparent;")
         ps_layout.addWidget(ps_hdr)
         self._param_body_layout = ps_layout
         self._param_current_widget = None

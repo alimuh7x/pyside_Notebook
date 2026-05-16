@@ -5,13 +5,13 @@ from PySide6.QtWidgets import QComboBox, QWidget
 
 _COMBO_POPUP_STYLE = (
     "QAbstractItemView {"
-    " background:#ffffff;"
-    " color:#1e293b;"
-    " border:1px solid #bfdbfe;"
+    " background:#2c313a;"
+    " color:#d7dae0;"
+    " border:1px solid #3e4451;"
     " border-radius:6px;"
     " padding:2px;"
-    " selection-background-color:#dbeafe;"
-    " selection-color:#1e40af;"
+    " selection-background-color:#3e4451;"
+    " selection-color:#61afef;"
     " outline:0;"
     "}"
     "QAbstractItemView::item {"
@@ -19,42 +19,42 @@ _COMBO_POPUP_STYLE = (
     " border-radius:4px;"
     "}"
     "QAbstractItemView::item:hover {"
-    " background:#eff6ff;"
-    " color:#1d4ed8;"
+    " background:#3e4451;"
+    " color:#61afef;"
     "}"
 )
 
 _COMBO_WIDGET_STYLE = (
     "QComboBox {"
-    " background:#ffffff;"
-    " color:#1e293b;"
-    " border:1px solid #e2e8f0;"
+    " background:#2c313a;"
+    " color:#d7dae0;"
+    " border:1px solid #3e4451;"
     " border-radius:7px;"
     " padding:4px 28px 4px 10px;"
-    " font-size:12px;"
+    " font-size:14px;"
     "}"
     "QComboBox:hover {"
-    " border-color:#93c5fd;"
-    " background:#f8faff;"
+    " border-color:#61afef;"
+    " background:#282c34;"
     "}"
     "QComboBox:focus {"
-    " border-color:#2563eb;"
+    " border-color:#61afef;"
     "}"
     "QComboBox::drop-down {"
     " subcontrol-origin:padding;"
     " subcontrol-position:right center;"
     " width:22px;"
-    " border-left:1px solid #e2e8f0;"
+    " border-left:1px solid #3e4451;"
     " border-top-right-radius:7px;"
     " border-bottom-right-radius:7px;"
-    " background:#f1f5f9;"
+    " background:#3e4451;"
     "}"
     "QComboBox::down-arrow {"
     " image:none;"
     " width:0; height:0;"
     " border-left:4px solid transparent;"
     " border-right:4px solid transparent;"
-    " border-top:5px solid #64748b;"
+    " border-top:5px solid #d7dae0;"
     "}"
 )
 
@@ -98,7 +98,7 @@ class CheckableComboBox(QComboBox):
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setStyleSheet(
-            "QLineEdit { background:transparent; border:none; padding:0; color:#1e293b; font-size:12px; }"
+            "QLineEdit { background:transparent; border:none; padding:0; color:#1e293b; font-size:14px; }"
         )
         self.lineEdit().installEventFilter(self)
         self.view().setMouseTracking(True)

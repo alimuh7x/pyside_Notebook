@@ -35,7 +35,7 @@ def build_markdown_preview_html(source: str) -> str:
         "<meta charset='utf-8'/>"
         f"<link rel='stylesheet' href='{css_url}'>"
         "<style>"
-        "html, body { margin: 0; padding: 0; background: #ffffff; color: #0f1b2b; font-family: 'Segoe UI', 'Inter', sans-serif; font-size: 15px; overflow: hidden; }"
+        "html, body { margin: 0; padding: 0; background: #ffffff; color: #0f1b2b; font-family: 'Inter', sans-serif; font-size: 17px; overflow: hidden; }"
         "body { padding: 6px 10px; line-height: 1.45; }"
         "h1, h2, h3, h4 { color: #001f41; margin: 0.35em 0 0.18em; line-height: 1.2; }"
         "h1:first-child, h2:first-child, h3:first-child, h4:first-child, p:first-child { margin-top: 0; }"

@@ -90,45 +90,63 @@ GRAPH_SIZE_OPTIONS = (
 )
 
 _CARD_STYLE = """
-    QWidget#graphCard { background:#f8fbfe; border:1px solid #d7e2ec; border-radius:12px; }
+    QWidget#graphCard { background:#282c34; border:1px solid #3e4451; border-radius:12px; }
     QWidget#graphCard QLabel { background:transparent; border:none; }
     QWidget#graphCard QComboBox,
     QWidget#graphCard QLineEdit,
     QWidget#graphCard QListWidget,
     QWidget#graphCard QSpinBox {
-        background:#ffffff; border:1px solid #d1dce8;
-        border-radius:8px; padding:5px 8px; font-size:12px; font-weight:400; color:#0f1b2b;
+        background:#2c313a; border:1px solid #3e4451;
+        border-radius:8px; padding:5px 8px; font-size:14px; font-weight:700; color:#d7dae0;
     }
-    QWidget#graphCard QListView { background:#ffffff; border:1px solid #d1dce8; }
-    QWidget#graphCard QWidget#graphSection,
+    QWidget#graphCard QListView { background:#2c313a; border:1px solid #3e4451; }
+    QWidget#graphCard QWidget#graphSection {
+        background:#2c313a;
+        border:1px solid #3e4451;
+        border-radius:10px;
+    }
     QWidget#graphCard QWidget#graphPreviewCard {
         background:#ffffff;
-        border:1px solid #d7e2ec;
+        border:1px solid #3e4451;
         border-radius:10px;
     }
     QWidget#graphCard QRadioButton,
     QWidget#graphCard QPushButton {
-        font-size:12px; font-weight:400;
+        font-size:14px; font-weight:700;
     }
     QWidget#graphCard QComboBox QAbstractItemView {
-        selection-background-color:#dbeafe; selection-color:#1e40af; outline:0;
-        border:1px solid #bfdbfe; border-radius:6px;
+        background:#2c313a; color:#d7dae0;
+        selection-background-color:#3e4451; selection-color:#61afef; outline:0;
+        border:1px solid #3e4451; border-radius:6px;
     }
     QWidget#graphCard QComboBox QAbstractItemView::item:hover {
-        background:#eff6ff; color:#1d4ed8;
+        background:#3e4451; color:#61afef;
     }
 """
-_TEXT_SS  = "color:#355070; font-weight:400; font-size:12px;"
-_LBL_SS   = "color:#355070; font-weight:700; font-size:12px;"
-_TITLE_SS = "color:#001f41; font-weight:700; font-size:14px;"
+_TEXT_SS  = "color:#d7dae0; font-weight:700; font-size:14px;"
+_LBL_SS   = "color:#d7dae0; font-weight:700; font-size:12px;"
+_TITLE_SS = "color:#e5c07b; font-weight:700; font-size:12px;"
 _SECTION_TITLE_SS = _LBL_SS
-_MUTED_SS = "color:#64748b; font-weight:400; font-size:12px;"
+_MUTED_SS = "color:#5c6370; font-weight:700; font-size:14px;"
 _CB_SS = (
-    "QCheckBox { color:#355070; font-weight:400; font-size:12px; }"
-    "QCheckBox::indicator { width:13px; height:13px; border:1.5px solid #1d4ed8;"
-    " border-radius:3px; background:#fff; }"
-    "QCheckBox::indicator:checked { border:1.5px solid #1d4ed8; background:#bfdbfe; }"
+    "QCheckBox { color:#d7dae0; font-weight:700; font-size:14px; }"
+    "QCheckBox::indicator { width:13px; height:13px; border:1.5px solid #61afef;"
+    " border-radius:3px; background:#2c313a; }"
+    "QCheckBox::indicator:checked { border:1.5px solid #61afef; background:#3e4451; }"
 )
+
+
+_MARKER_LIMIT = 12
+_QUICK_COLORS  = ["#636efa", "#ef553b", "#00cc96", "#ab63fa", "#ffa15a", "#19d3f3", "#ff6692", "#b6e880"]
+_QUICK_SYMBOLS = ["circle", "square", "diamond", "triangle-up", "star", "cross", "pentagon", "triangle-down"]
+
+
+def _subsample(arr: "np.ndarray | None", n: int = _MARKER_LIMIT) -> "np.ndarray | None":
+    """Return at most n evenly-spaced samples from arr, or arr unchanged if shorter."""
+    if arr is None or len(arr) <= n:
+        return arr
+    idx = np.round(np.linspace(0, len(arr) - 1, n)).astype(int)
+    return arr[idx]
 
 
 # ── Scientific layout helpers (pure functions) ───────────────────────────────
@@ -136,7 +154,7 @@ _CB_SS = (
 def _default_style() -> dict[str, Any]:
     """Return the base scientific plotting style used across graph widgets."""
     return {
-        "font_size": 16, "line_width": 2, "marker_size": 7,
+        "font_size": 20, "line_width": 3, "marker_size": 7,
         "show_grid": True, "show_box": True,
         "ticks_inside": True, "show_minor_ticks": True,
         "graph_width": 800, "graph_height": 700,
@@ -145,7 +163,7 @@ def _default_style() -> dict[str, Any]:
 
 def _axis_opts(style: dict[str, Any], axis_title: str) -> dict[str, Any]:
     """Build one Plotly axis configuration from the active style settings."""
-    fs = int(style.get("font_size", 16))
+    fs = int(style.get("font_size", 20))
     td = "inside" if style.get("ticks_inside", True) else "outside"
     return {
         "title": {"text": axis_title, "font": {"size": fs + 2, "color": "#0f1b2b"}},
@@ -181,7 +199,7 @@ def _apply_layout(
         margin={"l": 60, "r": 160, "t": 35, "b": 90},
         font={"size": fs, "color": "#0f1b2b"},
         legend={"orientation": "v", "x": 1.02, "y": 1.0,
-                "xanchor": "left", "yanchor": "top", "font": {"size": fs}},
+                "xanchor": "left", "yanchor": "top", "font": {"size": fs + 4}},
         barmode=barmode, width=s.get("graph_width"), height=s.get("graph_height"),
     )
     fig.update_xaxes(**_axis_opts(s, x_title))
@@ -393,7 +411,7 @@ class DataSourceWidget(QWidget):
             "#dataSourceBox QRadioButton { " + _TEXT_SS + " }"
             "#dataSourceBox QLabel#dataSourcePath { " + _MUTED_SS + " }"
             "#dataSourceBox QPushButton { border:1px solid #93c5fd; border-radius:4px;"
-            " padding:3px 10px; font-size:12px; font-weight:400;"
+            " padding:3px 10px; font-size:14px; font-weight:700;"
             " background:#eff6ff; color:#1d4ed8; }"
             "#dataSourceBox QPushButton:hover { background:#dbeafe; }"
         )
@@ -674,7 +692,7 @@ class SeriesStyleWidget(QWidget):
         self._rows: dict[str, dict[str, AutoCloseComboBox]] = {}
 
         self.setStyleSheet(
-            "background:#ffffff; border:1px solid #d7e2ec; border-radius:8px;"
+            "background:#2c313a; border:1px solid #3e4451; border-radius:8px;"
         )
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 6)
@@ -922,12 +940,12 @@ class AnalysisWidget(QWidget):
         super().__init__(parent)
         self.setStyleSheet(
             "QWidget { background:transparent; border:none; }"
-            "QLabel { border:none; background:transparent; color:#355070;"
-            " font-weight:700; font-size:12px; }"
-            "QLineEdit { background:#fff; border:1px solid #d1dce8;"
-            " border-radius:4px; padding:2px 5px; font-size:12px; font-weight:400; }"
-            "QSpinBox  { background:#fff; border:1px solid #d1dce8;"
-            " border-radius:4px; padding:1px 3px; font-size:12px; font-weight:400; }"
+            "QLabel { border:none; background:transparent; color:#d7dae0;"
+            " font-weight:700; font-size:14px; }"
+            "QLineEdit { background:#2c313a; border:1px solid #3e4451;"
+            " border-radius:4px; padding:2px 5px; font-size:14px; font-weight:700; color:#d7dae0; }"
+            "QSpinBox  { background:#2c313a; border:1px solid #3e4451;"
+            " border-radius:4px; padding:1px 3px; font-size:14px; font-weight:700; color:#d7dae0; }"
         )
         print("[debug][analysis-widget] init shared_font labels=bold controls=regular", flush=True)
         root = QVBoxLayout(self)
@@ -1196,7 +1214,7 @@ class GraphBuilderCard(BaseGraphPanel):
         self._analysis      = AnalysisWidget(self)
         self._plot_view     = PlotView(self)
         self._status_label  = QLabel("Waiting for arrays", self)
-        self._status_label.setStyleSheet("color:#64748b; font-size:12px;")
+        self._status_label.setStyleSheet("color:#5c6370; font-size:14px;")
 
         self._build_layout(show_remove, show_analysis)
         self._connect_signals()
@@ -1316,7 +1334,7 @@ class GraphBuilderCard(BaseGraphPanel):
         hdr.addStretch(1)
         self._remove_btn = QLabel("✕", settings)
         self._remove_btn.setStyleSheet(
-            "color:#94a3b8; font-size:16px; border:none; padding:0 6px; border-radius:4px;"
+            "color:#94a3b8; font-size:18px; border:none; padding:0 6px; border-radius:4px;"
         )
         self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._remove_btn.mousePressEvent = (  # type: ignore[assignment]
@@ -1535,7 +1553,7 @@ class NotebookPlotPanel(QWidget):
         """Create the graphs-tab container with one main graph card and outputs area."""
         super().__init__(parent)
         self.layout_mode = layout_mode
-        self.setStyleSheet("background:#ffffff;")
+        self.setStyleSheet("background:#21252b;")
         self._nb_arrays_1d: dict[str, np.ndarray] = {}
         self._nb_arrays_2d: dict[str, np.ndarray] = {}
         self._extra_cards:  list[GraphBuilderCard] = []
@@ -1549,12 +1567,14 @@ class NotebookPlotPanel(QWidget):
 
         # header
         hdr = QHBoxLayout()
-        hdr.addWidget(QLabel("Graphs", self))
+        _graphs_lbl = QLabel("Graphs", self)
+        _graphs_lbl.setStyleSheet("color:#e5c07b; font-weight:700; font-size:12px;")
+        hdr.addWidget(_graphs_lbl)
         hdr.addStretch(1)
         add_btn = QLabel("+ Add Graph", self)
         add_btn.setStyleSheet(
-            "color:#1d4ed8; font-weight:600; font-size:13px;"
-            "padding:4px 10px; border:1px solid #93c5fd; border-radius:6px; background:#eff6ff;"
+            "color:#61afef; font-weight:600; font-size:12px;"
+            "padding:4px 10px; border:1px solid #3e4451; border-radius:6px; background:#2c313a;"
         )
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.mousePressEvent = lambda _e: self._add_extra_graph()  # type: ignore[assignment]
@@ -1597,10 +1617,10 @@ class NotebookPlotPanel(QWidget):
         self.outputs_scroll.setWidgetResizable(True)
         self.outputs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.outputs_scroll.setStyleSheet(
-            "QScrollArea { background:#ffffff; border:1px solid #d1dce8; }"
+            "QScrollArea { background:#21252b; border:1px solid #3e4451; }"
         )
         self.outputs_container = QWidget(self.outputs_scroll)
-        self.outputs_container.setStyleSheet("background:#ffffff;")
+        self.outputs_container.setStyleSheet("background:#21252b;")
         self.outputs_layout = QVBoxLayout(self.outputs_container)
         self.outputs_layout.setContentsMargins(0, 0, 0, 0)
         self.outputs_layout.setSpacing(8)
@@ -1738,21 +1758,21 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._clear_hist_btn = QPushButton("Clear history", self)
         self._clear_hist_btn.setFixedHeight(22)
         self._clear_hist_btn.setStyleSheet(
-            "QPushButton { font-size:10px; padding:2px 8px; border:1px solid #94a3b8;"
-            " border-radius:3px; background:#e2e8f0; color:#334155; }"
-            "QPushButton:hover { background:#cbd5e1; }"
+            "QPushButton { font-size:14px; padding:2px 8px; border:1px solid #3e4451;"
+            " border-radius:3px; background:#3e4451; color:#d7dae0; }"
+            "QPushButton:hover { background:#4a5568; }"
         )
         self._clear_hist_btn.clicked.connect(self.clear_history)
         self._clear_hist_btn.hide()
 
         self._status_label = QLabel("Use the quick controls to preview graphs.", self)
-        self._status_label.setStyleSheet("color:#64748b; font-size:12px;")
+        self._status_label.setStyleSheet("color:#5c6370; font-size:14px;")
         self._status_label.hide()
 
         # controls card
         card = QWidget(self)
         card.setStyleSheet(
-            "QWidget { background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; }"
+            "QWidget { background:#282c34; border:1px solid #3e4451; border-radius:8px; }"
             "QLabel { border:none; background:transparent; " + _LBL_SS + " }"
         )
         cl = QVBoxLayout(card)
@@ -1774,7 +1794,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._x_combo = AutoCloseComboBox(self._series_widget)
         self._x_combo.addItem("Index", "")
         self._plot_type_combo = AutoCloseComboBox(self._series_widget)
-        for lbl_t, val in PLOT_TYPE_OPTIONS:
+        for lbl_t, val in (("Lines", "lines"), ("Lines + Markers", "lines+markers")):
             self._plot_type_combo.addItem(lbl_t, val)
         self._y_combo = CheckableComboBox(self._series_widget)
         for lbl_text, widget, stretch in (
@@ -1812,7 +1832,6 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             eg.addWidget(control, stretch)
         self._evo_widget.hide()
         controls_row.addWidget(self._evo_widget, 6)
-        controls_row.addWidget(self._clear_hist_btn)
         cl.addLayout(controls_row)
         root.addWidget(card)
 
@@ -1820,10 +1839,11 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._plot_view = PlotView(self)
         self._plot_view.setMinimumHeight(360)
         self._plot_view.setMaximumHeight(360)
+        self._plot_view._toolbar.hide()
         self._plot_view.hide()
         root.addWidget(self._plot_view)
         self._empty_label = QLabel("No plot output yet.", self)
-        self._empty_label.setStyleSheet("color:#64748b; font-style:italic;")
+        self._empty_label.setStyleSheet("color:#5c6370; font-style:italic;")
         root.addWidget(self._empty_label)
         root.addStretch(1)
 
@@ -1854,7 +1874,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(1)
         label_widget = QLabel(label, block)
-        label_widget.setStyleSheet("font-size:10px; font-weight:700; color:#355070; background:transparent; border:none;")
+        label_widget.setStyleSheet("font-size:12px; font-weight:700; color:#d7dae0; background:transparent; border:none;")
         layout.addWidget(label_widget)
         layout.addWidget(widget)
         return block
@@ -1934,7 +1954,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         """Rebuild the quick preview, overlaying all historical runs as faded traces."""
         mode = self._mode_combo.currentData() or "series"
         style = {"graph_width": None, "graph_height": 360,
-                 "font_size": 14, "line_width": 3, "marker_size": 8,
+                 "font_size": 18, "line_width": 4, "marker_size": 8,
                  "show_grid": True, "show_box": True,
                  "ticks_inside": True, "show_minor_ticks": True}
 
@@ -1976,10 +1996,31 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             y_vars = [v for v in self._y_combo.checked_values() if isinstance(v, str)]
             x_var  = self._x_combo.currentData() or None
             plot_type = self._plot_type_combo.currentData() or "lines"
+            # Build the full-resolution line figure; markers are overlaid separately
             self._figure = build_notebook_plot_figure(
-                self._arrays_1d, x_var, y_vars, plot_type,
+                self._arrays_1d, x_var, y_vars, "lines",
                 "", "", "", {}, style,
             )
+            # Force explicit per-trace line colors so markers can match
+            for i, trace in enumerate(self._figure.data):
+                trace.update(line=dict(color=_QUICK_COLORS[i % len(_QUICK_COLORS)]))
+            # Overlay 12 evenly-spaced markers on top for lines+markers mode
+            if plot_type == "lines+markers":
+                x_full = self._arrays_1d.get(x_var) if x_var else None
+                for y_idx, y_var in enumerate(y_vars):
+                    y_full = self._arrays_1d.get(y_var)
+                    if y_full is None:
+                        continue
+                    color  = _QUICK_COLORS[y_idx % len(_QUICK_COLORS)]
+                    # run 0 = current trace, symbol index 0
+                    symbol = _QUICK_SYMBOLS[0]
+                    x_for_markers = x_full if x_full is not None else np.arange(len(y_full))
+                    self._figure.add_scatter(
+                        x=_subsample(x_for_markers), y=_subsample(y_full),
+                        mode="markers",
+                        marker=dict(size=11, color=color, symbol=symbol),
+                        showlegend=False,
+                    )
             has_plot = bool(y_vars)
 
             # ── label current trace and force legend when history exists ──────
@@ -2003,29 +2044,39 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
                     x_data = h_arrays.get(x_var) if x_var else None
                     if x_data is None:
                         x_data = x_current
-                    for y_var in y_vars:
+                    for y_idx, y_var in enumerate(y_vars):
                         y_data = h_arrays.get(y_var)
                         if y_data is None:
                             continue
-                        short_label = h_label[:40] if len(h_label) > 40 else h_label
+                        # h_idx 0 = oldest history → symbol index 1 (current is 0)
+                        symbol = _QUICK_SYMBOLS[(h_idx + 1) % len(_QUICK_SYMBOLS)]
+                        # Filter history label to only the keys present in cur_lbl
+                        if cur_lbl and "=" in cur_lbl:
+                            cur_keys = {p.split("=")[0].strip() for p in cur_lbl.replace("  ", " ").split() if "=" in p}
+                            kept = [p for p in h_label.split("  ") if any(p.strip().startswith(k + "=") for k in cur_keys)]
+                            filtered = "  ".join(kept) if kept else h_label
+                        else:
+                            filtered = h_label
+                        short_label = filtered[:40] if len(filtered) > 40 else filtered
                         trace_name = f"{short_label} | {y_var}" if len(y_vars) > 1 else short_label
-                        if plot_type in ("lines", "lines+markers"):
+                        # Full-resolution line trace
+                        self._figure.add_scatter(
+                            x=x_data, y=y_data,
+                            mode="lines",
+                            name=trace_name,
+                            line=dict(color=color, width=4),
+                            opacity=opacity,
+                            showlegend=True,
+                        )
+                        # 12-point marker overlay for lines+markers
+                        if plot_type == "lines+markers":
+                            x_for_markers = x_data if x_data is not None else np.arange(len(y_data))
                             self._figure.add_scatter(
-                                x=x_data, y=y_data,
-                                mode="lines" if plot_type == "lines" else "lines+markers",
-                                name=trace_name,
-                                line=dict(color=color, width=3),
-                                opacity=opacity,
-                                showlegend=True,
-                            )
-                        elif plot_type == "markers":
-                            self._figure.add_scatter(
-                                x=x_data, y=y_data,
+                                x=_subsample(x_for_markers), y=_subsample(y_data),
                                 mode="markers",
-                                name=trace_name,
-                                marker=dict(color=color, size=5),
+                                marker=dict(color=color, size=10, symbol=symbol),
                                 opacity=opacity,
-                                showlegend=True,
+                                showlegend=False,
                             )
                         # bar / histogram history not shown
 

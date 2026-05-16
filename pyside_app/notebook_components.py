@@ -25,9 +25,9 @@ from pyside_app.notebook_plot_panel import QuickGraphPreviewPanel
 
 
 PRIMARY_BTN = (
-    "QPushButton { background:#001f41; color:white; border-radius:6px; padding:2px 10px; "
+    "QPushButton { background:#1e3d28; color:#98c379; border:1px solid #2d5a3d; border-radius:6px; padding:2px 10px; "
     "min-height:24px; max-height:24px; font-weight:700; } "
-    "QPushButton:hover { background:#0d3567; }"
+    "QPushButton:hover { background:#2d5a3d; }"
 )
 SECONDARY_BTN = (
     "QPushButton { background:#374151; color:white; border-radius:6px; padding:2px 10px; "
@@ -35,9 +35,9 @@ SECONDARY_BTN = (
     "QPushButton:hover { background:#1f2937; }"
 )
 LIGHT_BTN = (
-    "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:2px 10px; "
+    "QPushButton { background:#3e4451; color:#d7dae0; border-radius:6px; padding:2px 10px; "
     "min-height:24px; max-height:24px; } "
-    "QPushButton:hover { background:#cbd5e1; }"
+    "QPushButton:hover { background:#4a5568; }"
 )
 
 
@@ -95,7 +95,7 @@ class NotebookToolbar(QWidget):
     def _toolbar_button(self, label: str, handler: object, style: str) -> QPushButton:
         print(f"[debug][notebook-toolbar] toolbar_button label={label!r}", flush=True)
         button = QPushButton(label, self)
-        button.setStyleSheet(style + " QPushButton { font-size:12px; font-weight:400; }")
+        button.setStyleSheet(style + " QPushButton { font-size:14px; font-weight:700; }")
         button.clicked.connect(handler)
         return button
 
@@ -130,7 +130,7 @@ class SidebarWidget(QFrame):
         self._summarize_value = summarize_value
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet(
-            "QFrame { background:#ffffff; border:1px solid #d1dce8; }"
+            "QFrame { background:#282c34; border:1px solid #3e4451; }"
             "QLabel { background:transparent; border:none; " + text_style + " }"
         )
         layout = QVBoxLayout(self)
@@ -167,11 +167,11 @@ class SidebarWidget(QFrame):
         self.variables_browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.variables_browser.setStyleSheet(
             "QTextBrowser {"
-            " border:1px solid #d1dce8;"
-            " background:#ffffff;"
-            " font-family:'Segoe UI', 'Roboto Condensed', Arial, sans-serif;"
+            " border:1px solid #3e4451;"
+            " background:#282c34;"
+            " font-family:'Inter', sans-serif;"
             " font-size:14px;"
-            " color:#0f1b2b;"
+            " color:#d7dae0;"
             "}"
         )
         self.variables_browser.document().setDocumentMargin(8)
@@ -194,23 +194,23 @@ class SidebarWidget(QFrame):
             rows.append((name, summary))
         print(f"[debug][sidebar-widget] refresh_variables_panel rows={len(rows)}", flush=True)
         if not rows:
-            self.variables_browser.setHtml("<p style='color:#64748b; font-style:italic;'>Run code to see variables here.</p>")
+            self.variables_browser.setHtml("<p style='color:#5c6370; font-style:italic;'>Run code to see variables here.</p>")
             return
 
         table_rows = "".join(
             "<tr>"
-            f"<td style='padding:4px 7px; border-bottom:1px solid #e2e8f0; white-space:nowrap; vertical-align:top; line-height:1.1;'>"
-            f"<code style='font-family:Consolas, monospace; color:#001f41; font-size:14px; font-weight:700;'>{html.escape(name)}</code></td>"
-            f"<td style='padding:4px 7px; border-bottom:1px solid #e2e8f0; font-family:Consolas, monospace; font-size:14px; color:#001f41; font-weight:700; line-height:1.1;'>{html.escape(summary)}</td>"
+            f"<td style='padding:4px 7px; border-bottom:1px solid #3e4451; white-space:nowrap; vertical-align:top; line-height:1.1;'>"
+            f"<code style='font-family:Consolas, monospace; color:#e5c07b; font-size:14px; font-weight:700;'>{html.escape(name)}</code></td>"
+            f"<td style='padding:4px 7px; border-bottom:1px solid #3e4451; font-family:Consolas, monospace; font-size:14px; color:#d7dae0; font-weight:700; line-height:1.1;'>{html.escape(summary)}</td>"
             "</tr>"
             for name, summary in rows
         )
         self.variables_browser.setHtml(
-            "<table style='width:100%; border-collapse:collapse; font-family:Segoe UI, Arial, sans-serif; font-size:14px;'>"
+            "<table style='width:100%; border-collapse:collapse; font-family:Inter, sans-serif; font-size:14px;'>"
             "<thead>"
             "<tr>"
-            "<th style='text-align:left; padding:5px 7px; border-bottom:2px solid #d1dce8; color:#001f41; font-size:14px; font-weight:700; line-height:1.1;'>Variable</th>"
-            "<th style='text-align:left; padding:5px 7px; border-bottom:2px solid #d1dce8; color:#001f41; font-size:14px; font-weight:700; line-height:1.1;'>Value</th>"
+            "<th style='text-align:left; padding:5px 7px; border-bottom:2px solid #3e4451; color:#e5c07b; font-size:14px; font-weight:700; line-height:1.1;'>Variable</th>"
+            "<th style='text-align:left; padding:5px 7px; border-bottom:2px solid #3e4451; color:#e5c07b; font-size:14px; font-weight:700; line-height:1.1;'>Value</th>"
             "</tr>"
             "</thead>"
             f"<tbody>{table_rows}</tbody></table>"
@@ -232,7 +232,7 @@ class ExamplesBar(QWidget):
     ) -> None:
         super().__init__(parent)
         self.examples: list[object] = []
-        self.setStyleSheet("background:#f0f4f8;")
+        self.setStyleSheet("background:#282c34;")
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
@@ -243,11 +243,11 @@ class ExamplesBar(QWidget):
         self.example_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.example_combo, 1)
 
-        self.insert_btn = QPushButton("Insert Example", self)
+        self.insert_btn = QPushButton("Insert", self)
         self.insert_btn.setStyleSheet(
-            "QPushButton { background:#001f41; color:white; border-radius:6px; padding:5px 14px;"
-            " font-weight:600; font-size:12px; min-height:26px; }"
-            "QPushButton:hover { background:#0d3567; }"
+            "QPushButton { background:#1a2f42; color:#61afef; border:1px solid #2a4a60; border-radius:6px; padding:5px 14px;"
+            " font-weight:600; font-size:14px; min-height:26px; }"
+            "QPushButton:hover { background:#2a4a60; }"
         )
         self.insert_btn.clicked.connect(self.insert_example_requested.emit)
         layout.addWidget(self.insert_btn)
@@ -298,14 +298,14 @@ class HelpPanelsWidget(QWidget):
         self.functions_panel.setHtml(functions_html)
         self.functions_panel.hide()
         self.functions_panel.setMinimumHeight(180)
-        self.functions_panel.setStyleSheet("QTextBrowser { font-size:12px; color:#355070; }")
+        self.functions_panel.setStyleSheet("QTextBrowser { font-size:14px; color:#d7dae0; background:#282c34; }")
         root.addWidget(self.functions_panel)
 
         self.markdown_help_panel = QTextBrowser(self)
         self.markdown_help_panel.setHtml(markdown_html)
         self.markdown_help_panel.hide()
         self.markdown_help_panel.setMinimumHeight(180)
-        self.markdown_help_panel.setStyleSheet("QTextBrowser { font-size:12px; color:#355070; }")
+        self.markdown_help_panel.setStyleSheet("QTextBrowser { font-size:14px; color:#d7dae0; background:#282c34; }")
         root.addWidget(self.markdown_help_panel)
         print("[debug][help-panels] init:done", flush=True)
 
@@ -337,7 +337,7 @@ class NotebookColumnsWidget(QWidget):
     ) -> None:
         super().__init__(parent)
         print("[debug][columns-widget] init:start", flush=True)
-        self.setStyleSheet("background:#ffffff;")
+        self.setStyleSheet("background:#282c34;")
         wrapper_layout = QVBoxLayout(self)
         wrapper_layout.setContentsMargins(0, 0, 0, 0)
         wrapper_layout.setSpacing(8)
@@ -350,22 +350,22 @@ class NotebookColumnsWidget(QWidget):
             self._toolbar_button(
                 "Add Code",
                 self._request_add_code,
-                "QPushButton { background:#001f41; color:white; border-radius:6px; padding:4px 10px; font-weight:600; } "
-                "QPushButton:hover { background:#0d3567; }",
+                "QPushButton { background:#2c313a; color:#d7dae0; border-radius:6px; padding:4px 10px; font-weight:600; } "
+                "QPushButton:hover { background:#3e4451; }",
             )
         )
         header.addWidget(
             self._toolbar_button(
                 "Add Markdown",
                 self._request_add_markdown,
-                "QPushButton { background:#e2e8f0; color:#0f1b2b; border-radius:6px; padding:4px 10px; } "
-                "QPushButton:hover { background:#cbd5e1; }",
+                "QPushButton { background:#3e4451; color:#d7dae0; border-radius:6px; padding:4px 10px; } "
+                "QPushButton:hover { background:#4a5568; }",
             )
         )
         wrapper_layout.addLayout(header)
 
         self.container = QWidget(self)
-        self.container.setStyleSheet("background:#ffffff;")
+        self.container.setStyleSheet("background:#282c34;")
         print("[debug][columns-widget] build_column container_style column='left' background='#ffffff'", flush=True)
         self.cells_layout = QVBoxLayout(self.container)
         self.cells_layout.setContentsMargins(0, 0, 0, 0)
@@ -377,7 +377,7 @@ class NotebookColumnsWidget(QWidget):
     def _toolbar_button(self, label: str, handler: object, style: str) -> QPushButton:
         print(f"[debug][columns-widget] toolbar_button label={label!r}", flush=True)
         button = QPushButton(label, self)
-        button.setStyleSheet(style + " QPushButton { font-size:12px; font-weight:400; }")
+        button.setStyleSheet(style + " QPushButton { font-size:14px; font-weight:700; }")
         button.clicked.connect(handler)
         return button
 
@@ -424,7 +424,7 @@ class GraphPanelWidget(QWidget):
         self._add_btn = QPushButton("+ Add Graph Panel", self)
         self._add_btn.setStyleSheet(
             "QPushButton { background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;"
-            " border-radius:6px; padding:4px 12px; font-weight:600; font-size:12px; }"
+            " border-radius:6px; padding:4px 12px; font-weight:600; font-size:14px; }"
             "QPushButton:hover { background:#dbeafe; }"
         )
         self._add_btn.clicked.connect(self._add_panel)
@@ -454,7 +454,7 @@ class GraphPanelWidget(QWidget):
         card = QFrame(self)
         card.setFrameShape(QFrame.Shape.StyledPanel)
         card.setStyleSheet(
-            "QFrame { background:#ffffff; border:1px solid #d1dce8; border-radius:8px; }"
+            "QFrame { background:#282c34; border:1px solid #3e4451; border-radius:8px; }"
         )
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(0, 0, 0, 0)
@@ -463,7 +463,7 @@ class GraphPanelWidget(QWidget):
         # header
         hdr = QWidget(card)
         hdr.setStyleSheet(
-            "QWidget { background:#eef4ff; border-bottom:1px solid #bfdbfe;"
+            "QWidget { background:#2c313a; border-bottom:1px solid #3e4451;"
             " border-top-left-radius:8px; border-top-right-radius:8px; }"
             "QLabel { background:transparent; border:none; }"
             "QPushButton { background:transparent; border:none; }"
@@ -473,14 +473,14 @@ class GraphPanelWidget(QWidget):
         hdr_layout.setSpacing(6)
 
         title_lbl = QLabel(f"Graph Panel {n}", hdr)
-        title_lbl.setStyleSheet("font-weight:700; font-size:12px; color:#1e40af; background:transparent; border:none;")
+        title_lbl.setStyleSheet("font-weight:700; font-size:14px; color:#e5c07b; background:transparent; border:none;")
         hdr_layout.addWidget(title_lbl)
         hdr_layout.addStretch(1)
 
         _btn_ss = (
-            "QPushButton { font-size:10px; padding:2px 10px; border:1px solid #bfdbfe;"
-            " border-radius:6px; background:#dbeafe; color:#1d4ed8; font-weight:500; }"
-            "QPushButton:hover { background:#bfdbfe; border-color:#93c5fd; }"
+            "QPushButton { font-size:14px; padding:2px 10px; border:1px solid #3e4451;"
+            " border-radius:6px; background:#3e4451; color:#d7dae0; font-weight:500; }"
+            "QPushButton:hover { background:#4a5568; border-color:#61afef; color:#61afef; }"
         )
 
         clear_btn = QPushButton("Clear history", hdr)
@@ -502,7 +502,7 @@ class GraphPanelWidget(QWidget):
         remove_btn = QPushButton("✕", hdr)
         remove_btn.setFixedSize(20, 20)
         remove_btn.setStyleSheet(
-            "QPushButton { color:#64748b; font-size:11px; font-weight:700; background:transparent; border:none; }"
+            "QPushButton { color:#64748b; font-size:13px; font-weight:700; background:transparent; border:none; }"
             "QPushButton:hover { color:#dc2626; }"
         )
         remove_btn.clicked.connect(lambda: self._remove_panel(card, panel))
