@@ -157,10 +157,7 @@ class ExecutionController:
             source = cell.source() if callable(getattr(cell, "source", None)) else ""
             params = detect_cell_parameters(source)
             if params:
-                store_label = "  ".join(
-                    f"{k}={int(spec['value'])}" if spec.get("is_int") else f"{k}={float(spec['value']):.4g}"
-                    for k, spec in params.items()
-                )
+                store_label = "current"
                 self.graph_controller.graph_panel.set_current_label(store_label)
             else:
                 store_label = "baseline"

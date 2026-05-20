@@ -1,6 +1,6 @@
 """Temp-file-based array run history.
 
-Each execution run saves all numeric numpy arrays to a temp directory.
+Each execution run saves all numeric 1D/2D/3D numpy arrays to a temp directory.
 Arrays are stored as .npy files inside per-run subdirectories.
 The store is cleared on kernel restart.
 """
@@ -40,7 +40,7 @@ def store_run(namespace: dict[str, Any], label: str = "") -> int:
     for name, value in namespace.items():
         if not isinstance(value, np.ndarray):
             continue
-        if value.ndim not in (1, 2) or value.size == 0:
+        if value.ndim not in (1, 2, 3) or value.size == 0:
             continue
         if not np.issubdtype(value.dtype, np.number):
             continue
@@ -110,7 +110,7 @@ def get_run_snapshots(array_name: str) -> list[tuple[str, dict[str, np.ndarray]]
                 arr = np.load(os.path.join(run_dir, file_name))
             except Exception:
                 continue
-            if arr.ndim in (1, 2):
+            if arr.ndim in (1, 2, 3):
                 arrays[var_name] = arr
         if array_name not in arrays:
             continue

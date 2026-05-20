@@ -11,12 +11,12 @@ from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QMouseEvent, QTextCursor
 from PySide6.QtTest import QTest
 
-from main import configure_desktop_graphics
+from main import application_icon_path, apply_application_icon, configure_desktop_graphics
 from pyside_app.controls import AutoCloseComboBox, CheckableComboBox
 from pyside_app.main_window import MainWindow
-from pyside_app.execution_engine import ExecutionOutput, ExecutionResult
+from pyside_app.execution_engine import ExecutionOutput, ExecutionResult, detect_cell_parameters
 from pyside_app.markdown_preview import build_markdown_preview_html, katex_assets_dir, MarkdownPreview
-from pyside_app.notebook_tab import NotebookTab
+from pyside_app.notebook_tab import NotebookTab, parameter_change_label
 from pyside_app.plot_view import PlotView
 
 
@@ -64,6 +64,20 @@ def _app() -> QApplication:
     return app
 
 
+def test_parameter_change_label_only_includes_changed_values():
+    previous = {"D": 0.1, "dt": 0.0005, "Nt": 200}
+    overrides = {"D": 0.2, "dt": 0.0005, "Nt": 200}
+
+    assert parameter_change_label(overrides, previous) == "D=0.2"
+
+
+def test_parameter_change_label_uses_current_when_no_values_changed():
+    previous = {"D": 0.1, "dt": 0.0005, "Nt": 200}
+    overrides = {"D": 0.1, "dt": 0.0005, "Nt": 200}
+
+    assert parameter_change_label(overrides, previous) == "current"
+
+
 def test_main_window_exposes_tabbed_notebook_and_graphs_shell():
     _app()
 
@@ -72,11 +86,64 @@ def test_main_window_exposes_tabbed_notebook_and_graphs_shell():
     assert window.windowFlags() & Qt.WindowType.FramelessWindowHint
     assert window.centralWidget() is window.window_shell
     assert window.title_bar.window() is window
-    assert window.content_layout.indexOf(window.workspace_tabs) >= 0
-    assert window.workspace_tabs.count() == 2
+    assert window.content_layout.indexOf(window.session_tabs) >= 0
+    assert window.session_tabs.count() == 1
+    assert window.session_tabs.tabText(0) == "Tab 1"
+    assert window.workspace_tabs.count() == 4
     assert window.workspace_tabs.tabText(0) == "Notebook"
     assert window.workspace_tabs.tabText(1) == "Graphs"
+    assert window.workspace_tabs.tabText(2) == "Formula Plot"
+    assert window.workspace_tabs.tabText(3) == "FFT Analysis"
     assert window.windowTitle() == "Calculation Notebook Desktop"
+
+
+def test_application_uses_calculator_png_asset_icon():
+    app = _app()
+    window = MainWindow()
+
+    icon = apply_application_icon(app, window)
+    title_pixmap = window.title_bar.icon_label.pixmap()
+
+    assert application_icon_path().name == "calculator.png"
+    assert application_icon_path().exists()
+    assert not icon.isNull()
+    assert not app.windowIcon().isNull()
+    assert not window.windowIcon().isNull()
+    assert title_pixmap is not None
+    assert not title_pixmap.isNull()
+
+
+def test_main_window_session_tabs_create_independent_clean_workspaces():
+    _app()
+
+    window = MainWindow()
+    first_session = window.current_session()
+    first_notebook = first_session.notebook_tab
+    first_graph_state = first_session.graph_state
+    first_notebook.cells[0].editor.setPlainText("a = 10")
+
+    second_session = window.add_workspace_session()
+
+    assert window.session_tabs.count() == 2
+    assert window.session_tabs.tabText(1) == "Tab 2"
+    assert second_session is not first_session
+    assert second_session.notebook_tab is not first_notebook
+    assert second_session.graph_state is not first_graph_state
+    assert second_session.notebook_tab.cells[0].editor.toPlainText() == ""
+
+
+def test_main_window_session_tabs_close_but_keep_one_workspace():
+    _app()
+
+    window = MainWindow()
+    window.add_workspace_session()
+
+    window.close_workspace_session(1)
+    assert window.session_tabs.count() == 1
+
+    window.close_workspace_session(0)
+    assert window.session_tabs.count() == 1
+    assert window.session_tabs.tabText(0) == "Tab 1"
 
 
 def test_notebook_tab_uses_workspace_scroll_instead_of_inner_cell_scroll_area():
@@ -321,6 +388,81 @@ def test_variables_panel_shows_scalar_assignments():
     variables_text = tab.variables_browser.toPlainText()
     assert "answer" in variables_text
     assert "42" in variables_text
+
+
+def test_variables_panel_shows_parameter_controls_without_running_on_step():
+    _app()
+    tab = NotebookTab()
+    source = "D = 0.1\nanswer = D * 2"
+    params = detect_cell_parameters(source)
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    tab.sidebar_widget.set_parameter_controls(
+        params,
+        source,
+        lambda source, overrides, _on_result: calls.append((source, dict(overrides))),
+    )
+    tab.execution_engine.execute(source)
+    tab._refresh_variables_panel()
+
+    variables_text = tab.variables_browser.toPlainText()
+    assert "Variable" in variables_text
+    assert "Value" in variables_text
+    assert "Parameters" in variables_text
+    assert "D" in variables_text
+    assert "answer" in variables_text
+    assert "0.2" in variables_text
+    assert tab.sidebar_widget.parameter_value_edits["D"].text() == "0.1"
+    assert "font-weight:700; color:#61afef;" in tab.sidebar_widget.parameter_value_edits["D"].styleSheet()
+
+    QTest.mouseClick(tab.sidebar_widget.parameter_plus_buttons["D"], Qt.MouseButton.LeftButton)
+
+    assert calls == []
+    assert tab.sidebar_widget.parameter_value_edits["D"].text() != "0.1"
+
+
+def test_variables_panel_run_sends_parameter_overrides_and_reset_all_restores_defaults():
+    _app()
+    tab = NotebookTab()
+    source = "D = 0.1\nanswer = D * 2"
+    params = detect_cell_parameters(source)
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    tab.sidebar_widget.set_parameter_controls(
+        params,
+        source,
+        lambda source, overrides, _on_result: calls.append((source, dict(overrides))),
+    )
+    tab.execution_engine.execute(source)
+    tab._refresh_variables_panel()
+
+    QTest.mouseClick(tab.sidebar_widget.parameter_plus_buttons["D"], Qt.MouseButton.LeftButton)
+    changed_value = float(tab.sidebar_widget.parameter_value_edits["D"].text())
+    QTest.mouseClick(tab.sidebar_widget.parameter_run_button, Qt.MouseButton.LeftButton)
+
+    assert calls == [(source, {"D": changed_value})]
+
+    QTest.mouseClick(tab.sidebar_widget.parameter_reset_all_button, Qt.MouseButton.LeftButton)
+
+    assert tab.sidebar_widget.parameter_value_edits["D"].text() == "0.1"
+
+
+def test_variables_panel_plus_expands_past_detected_parameter_maximum():
+    _app()
+    tab = NotebookTab()
+    source = "D = 0.1\nanswer = D * 2"
+    params = detect_cell_parameters(source)
+    original_max = params["D"]["max"]
+
+    assert original_max == 0.30000000000000004
+    tab.sidebar_widget.set_parameter_controls(params, source, None)
+    tab.execution_engine.execute(source)
+    tab._refresh_variables_panel()
+
+    for _index in range(5):
+        QTest.mouseClick(tab.sidebar_widget.parameter_plus_buttons["D"], Qt.MouseButton.LeftButton)
+
+    assert float(tab.sidebar_widget.parameter_value_edits["D"].text()) > original_max
 
 
 def test_code_cell_has_visual_accent_and_python_highlighter():
@@ -682,7 +824,7 @@ def test_variables_panel_hides_arrays():
     variables_text = tab.variables_browser.toPlainText()
     assert "answer" in variables_text
     assert "42" in variables_text
-    assert "u" not in variables_text
+    assert "\nu " not in variables_text
     assert "shape=(50,)" not in variables_text
 
 

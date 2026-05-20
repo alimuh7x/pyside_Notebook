@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import html
+import math as _math
 from collections.abc import Callable, Sequence
 from types import ModuleType
 from typing import Any
@@ -12,9 +12,13 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
     QTextBrowser,
     QVBoxLayout,
     QWidget,
@@ -128,6 +132,14 @@ class SidebarWidget(QFrame):
         print("[debug][sidebar-widget] init:start", flush=True)
         self._namespace_skip = namespace_skip
         self._summarize_value = summarize_value
+        self._parameter_specs: dict[str, dict[str, Any]] = {}
+        self._parameter_source = ""
+        self._parameter_rerun_fn: Callable | None = None
+        self._parameter_overrides: dict[str, Any] = {}
+        self._parameter_steps: dict[str, float] = {}
+        self.parameter_value_edits: dict[str, QLineEdit] = {}
+        self.parameter_minus_buttons: dict[str, QPushButton] = {}
+        self.parameter_plus_buttons: dict[str, QPushButton] = {}
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet(
             "QFrame { background:#282c34; border:1px solid #3e4451; }"
@@ -160,29 +172,122 @@ class SidebarWidget(QFrame):
         variables_label.setStyleSheet(heading_style)
         variables_header.addWidget(variables_label)
         variables_header.addStretch(1)
+        self.parameter_reset_all_button = QPushButton("Reset all", wrapper)
+        self.parameter_reset_all_button.setFixedHeight(24)
+        self.parameter_reset_all_button.setStyleSheet(LIGHT_BTN)
+        self.parameter_reset_all_button.clicked.connect(self._reset_all_parameters)
+        variables_header.addWidget(self.parameter_reset_all_button)
+        self.parameter_run_button = QPushButton("Run", wrapper)
+        self.parameter_run_button.setFixedHeight(24)
+        self.parameter_run_button.setStyleSheet(PRIMARY_BTN)
+        self.parameter_run_button.clicked.connect(self._run_current_parameters)
+        variables_header.addWidget(self.parameter_run_button)
         wrapper_layout.addLayout(variables_header)
 
-        self.variables_browser = QTextBrowser(wrapper)
+        self.variables_browser = VariablesParameterTable(wrapper)
         self.variables_browser.setMinimumHeight(360)
         self.variables_browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.variables_browser.setStyleSheet(
-            "QTextBrowser {"
+            "QTableWidget {"
             " border:1px solid #3e4451;"
             " background:#282c34;"
             " font-family:'Inter', sans-serif;"
-            " font-size:14px;"
+            " font-size:12px;"
             " color:#d7dae0;"
             "}"
+            "QHeaderView::section {"
+            " background:#2c313a; color:#e5c07b; border:1px solid #3e4451;"
+            " padding:5px 7px; font-size:14px; font-weight:700;"
+            "}"
+            "QTableWidget::item { border-bottom:1px solid #3e4451; padding:4px 7px; }"
         )
-        self.variables_browser.document().setDocumentMargin(8)
         wrapper_layout.addWidget(self.variables_browser, 1)
         self._refresh_variables_panel({})
         return wrapper
 
+    @staticmethod
+    def _fmt_parameter_value(value: float, is_int: bool, step: float = 0.0) -> str:
+        if is_int:
+            return str(int(round(value)))
+        if step > 0:
+            decimals = max(0, -int(_math.floor(_math.log10(step))))
+            text = f"{value:.{decimals}f}"
+            if "." in text:
+                text = text.rstrip("0").rstrip(".")
+            return text
+        if abs(value) >= 1e4 or (abs(value) < 1e-3 and value != 0.0):
+            return f"{value:.3g}"
+        return f"{value:.4g}"
+
+    @staticmethod
+    def _nice_parameter_step(lo: float, hi: float, is_int: bool, max_steps: int = 20) -> float:
+        if is_int:
+            raw = max(1.0, (hi - lo) / max_steps)
+            return float(int(_math.ceil(raw)))
+        span = hi - lo
+        if span <= 0:
+            return 0.1
+        raw = span / 10.0
+        exp = _math.floor(_math.log10(raw))
+        nice = raw / (10 ** exp)
+        if nice <= 1.0:
+            rounded = 1.0
+        elif nice <= 2.0:
+            rounded = 2.0
+        elif nice <= 5.0:
+            rounded = 5.0
+        else:
+            rounded = 10.0
+        step = rounded * (10 ** exp)
+        while (hi - lo) / step > max_steps:
+            if rounded == 1.0:
+                rounded = 2.0
+            elif rounded == 2.0:
+                rounded = 5.0
+            elif rounded == 5.0:
+                rounded = 10.0
+            else:
+                rounded = 1.0
+                exp += 1
+            step = rounded * (10 ** exp)
+        return step
+
+    def set_parameter_controls(self, params: dict[str, dict[str, Any]], source: str, rerun_fn: Callable | None) -> None:
+        print(f"[debug][sidebar-widget] set_parameter_controls count={len(params)} source_len={len(source)}", flush=True)
+        self._parameter_specs = {name: dict(spec) for name, spec in params.items()}
+        self._parameter_source = source
+        self._parameter_rerun_fn = rerun_fn
+        next_overrides: dict[str, Any] = {}
+        next_steps: dict[str, float] = {}
+        for name, spec in self._parameter_specs.items():
+            default = spec["value"]
+            next_overrides[name] = self._parameter_overrides.get(name, default)
+            next_steps[name] = self._nice_parameter_step(float(spec["min"]), float(spec["max"]), bool(spec["is_int"]))
+            print(
+                f"[debug][sidebar-widget] parameter:init name={name!r} default={default!r} "
+                f"pending={next_overrides[name]!r} step={next_steps[name]!r}",
+                flush=True,
+            )
+        self._parameter_overrides = next_overrides
+        self._parameter_steps = next_steps
+        self._refresh_variables_panel({})
+
+    def clear_parameter_controls(self) -> None:
+        print("[debug][sidebar-widget] clear_parameter_controls", flush=True)
+        self._parameter_specs = {}
+        self._parameter_source = ""
+        self._parameter_rerun_fn = None
+        self._parameter_overrides = {}
+        self._parameter_steps = {}
+        self.parameter_value_edits.clear()
+        self.parameter_minus_buttons.clear()
+        self.parameter_plus_buttons.clear()
+        self._refresh_variables_panel({})
+
     def _refresh_variables_panel(self, namespace: dict[str, object]) -> None:
         print("[debug][sidebar-widget] refresh_variables_panel", flush=True)
         print(f"[debug][sidebar-widget] refresh_variables_panel_namespace count={len(namespace)}", flush=True)
-        rows: list[tuple[str, str]] = []
+        rows_by_name: dict[str, str] = {}
         for name, value in sorted(namespace.items()):
             if name in self._namespace_skip or name.startswith("_"):
                 continue
@@ -191,30 +296,193 @@ class SidebarWidget(QFrame):
             if isinstance(value, (np.ndarray, pd.DataFrame, pd.Series)):
                 continue
             summary, _type_name = self._summarize_value(value)
-            rows.append((name, summary))
-        print(f"[debug][sidebar-widget] refresh_variables_panel rows={len(rows)}", flush=True)
-        if not rows:
-            self.variables_browser.setHtml("<p style='color:#5c6370; font-style:italic;'>Run code to see variables here.</p>")
-            return
+            rows_by_name[name] = summary
+        for name, spec in self._parameter_specs.items():
+            if name not in rows_by_name:
+                step = self._parameter_steps.get(name, 0.0)
+                rows_by_name[name] = self._fmt_parameter_value(float(spec["value"]), bool(spec["is_int"]), step)
+        rows = [(name, rows_by_name[name]) for name in sorted(rows_by_name)]
+        print(
+            f"[debug][sidebar-widget] refresh_variables_panel rows={len(rows)} "
+            f"params={list(self._parameter_specs)}",
+            flush=True,
+        )
+        self._rebuild_variables_table(rows)
 
-        table_rows = "".join(
-            "<tr>"
-            f"<td style='padding:4px 7px; border-bottom:1px solid #3e4451; white-space:nowrap; vertical-align:top; line-height:1.1;'>"
-            f"<code style='font-family:Consolas, monospace; color:#e5c07b; font-size:14px; font-weight:700;'>{html.escape(name)}</code></td>"
-            f"<td style='padding:4px 7px; border-bottom:1px solid #3e4451; font-family:Consolas, monospace; font-size:14px; color:#d7dae0; font-weight:700; line-height:1.1;'>{html.escape(summary)}</td>"
-            "</tr>"
-            for name, summary in rows
+    def _rebuild_variables_table(self, rows: list[tuple[str, str]]) -> None:
+        print(f"[debug][sidebar-widget] rebuild_variables_table rows={len(rows)}", flush=True)
+        self.parameter_value_edits.clear()
+        self.parameter_minus_buttons.clear()
+        self.parameter_plus_buttons.clear()
+        table = self.variables_browser
+        table.clear()
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["Variable", "Value", "Parameters"])
+        table.setRowCount(max(1, len(rows)))
+        table.set_plain_rows([("Variable", "Value", "Parameters"), *rows])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        table.verticalHeader().setVisible(False)
+        if not rows:
+            table.setItem(0, 0, QTableWidgetItem("Run code to see variables here."))
+            table.setItem(0, 1, QTableWidgetItem(""))
+            table.setItem(0, 2, QTableWidgetItem("-"))
+            return
+        for row_index, (name, summary) in enumerate(rows):
+            print(
+                f"[debug][sidebar-widget] rebuild_variables_table:row index={row_index} "
+                f"name={name!r} is_param={name in self._parameter_specs}",
+                flush=True,
+            )
+            name_item = QTableWidgetItem(name)
+            name_item.setForeground(Qt.GlobalColor.white)
+            value_item = QTableWidgetItem(summary)
+            value_item.setForeground(Qt.GlobalColor.white)
+            table.setItem(row_index, 0, name_item)
+            table.setItem(row_index, 1, value_item)
+            if name in self._parameter_specs:
+                table.setCellWidget(row_index, 2, self._build_parameter_controls(name))
+            else:
+                dash_item = QTableWidgetItem("-")
+                dash_item.setForeground(Qt.GlobalColor.white)
+                table.setItem(row_index, 2, dash_item)
+
+    def _build_parameter_controls(self, name: str) -> QWidget:
+        spec = self._parameter_specs[name]
+        step = self._parameter_steps.get(name, 0.0)
+        pending = float(self._parameter_overrides.get(name, spec["value"]))
+        row = QWidget(self.variables_browser)
+        row.setStyleSheet("QWidget { background:transparent; border:none; }")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(3)
+        button_style = (
+            "QPushButton { font-size:15px; font-weight:700; padding:0 6px; border:1px solid #3e4451;"
+            " border-radius:5px; background:#2c313a; color:#ffffff; min-width:24px; }"
+            "QPushButton:hover { background:#1d4ed8; border-color:#1d4ed8; color:#ffffff; }"
         )
-        self.variables_browser.setHtml(
-            "<table style='width:100%; border-collapse:collapse; font-family:Inter, sans-serif; font-size:14px;'>"
-            "<thead>"
-            "<tr>"
-            "<th style='text-align:left; padding:5px 7px; border-bottom:2px solid #3e4451; color:#e5c07b; font-size:14px; font-weight:700; line-height:1.1;'>Variable</th>"
-            "<th style='text-align:left; padding:5px 7px; border-bottom:2px solid #3e4451; color:#e5c07b; font-size:14px; font-weight:700; line-height:1.1;'>Value</th>"
-            "</tr>"
-            "</thead>"
-            f"<tbody>{table_rows}</tbody></table>"
+        minus_btn = QPushButton("-", row)
+        minus_btn.setFixedSize(24, 24)
+        minus_btn.setStyleSheet(button_style)
+        minus_btn.clicked.connect(lambda _=False, n=name: self._step_parameter(n, -1))
+        layout.addWidget(minus_btn)
+        edit = QLineEdit(row)
+        edit.setFixedWidth(72)
+        edit.setText(self._fmt_parameter_value(pending, bool(spec["is_int"]), step))
+        edit.setStyleSheet(
+            "QLineEdit { font-family:Consolas, monospace; font-size:14px; font-weight:700; color:#61afef;"
+            " background:#2c313a; border:1px solid #3e4451; border-radius:5px; padding:1px 5px; }"
+            "QLineEdit:focus { background:#282c34; border-color:#61afef; }"
         )
+        edit.editingFinished.connect(lambda n=name, e=edit: self._on_parameter_edit_finished(n, e))
+        layout.addWidget(edit)
+        plus_btn = QPushButton("+", row)
+        plus_btn.setFixedSize(24, 24)
+        plus_btn.setStyleSheet(button_style)
+        plus_btn.clicked.connect(lambda _=False, n=name: self._step_parameter(n, 1))
+        layout.addWidget(plus_btn)
+        self.parameter_minus_buttons[name] = minus_btn
+        self.parameter_value_edits[name] = edit
+        self.parameter_plus_buttons[name] = plus_btn
+        print(
+            f"[debug][sidebar-widget] parameter_controls:built name={name!r} pending={pending!r} step={step!r}",
+            flush=True,
+        )
+        return row
+
+    def _set_parameter_value(self, name: str, value: float) -> None:
+        spec = self._parameter_specs.get(name)
+        if spec is None:
+            print(f"[debug][sidebar-widget] parameter:set skipped_missing name={name!r}", flush=True)
+            return
+        lo, hi = float(spec["min"]), float(spec["max"])
+        step = self._parameter_steps.get(name, 0.0)
+        if value > hi:
+            spec["max"] = value
+            print(
+                f"[debug][sidebar-widget] parameter:expand_max name={name!r} old_max={hi!r} new_max={value!r}",
+                flush=True,
+            )
+        elif value < lo:
+            spec["min"] = value
+            print(
+                f"[debug][sidebar-widget] parameter:expand_min name={name!r} old_min={lo!r} new_min={value!r}",
+                flush=True,
+            )
+        if spec["is_int"]:
+            value = float(int(round(value)))
+        elif step > 0:
+            decimals = max(0, -int(_math.floor(_math.log10(step))))
+            value = round(value, decimals)
+        self._parameter_overrides[name] = value
+        text = self._fmt_parameter_value(value, bool(spec["is_int"]), step)
+        edit = self.parameter_value_edits.get(name)
+        if edit is not None:
+            edit.setText(text)
+        print(f"[debug][sidebar-widget] parameter:set name={name!r} value={value!r} text={text!r}", flush=True)
+
+    def _step_parameter(self, name: str, direction: int) -> None:
+        current = float(self._parameter_overrides.get(name, self._parameter_specs[name]["value"]))
+        step = self._parameter_steps.get(name, 1.0)
+        next_value = current + direction * step
+        print(
+            f"[debug][sidebar-widget] parameter:step name={name!r} direction={direction} "
+            f"current={current!r} step={step!r} next={next_value!r}",
+            flush=True,
+        )
+        self._set_parameter_value(name, next_value)
+
+    def _on_parameter_edit_finished(self, name: str, edit: QLineEdit) -> None:
+        print(f"[debug][sidebar-widget] parameter:edit_finished name={name!r} text={edit.text()!r}", flush=True)
+        try:
+            value = float(edit.text())
+        except ValueError:
+            self._set_parameter_value(name, float(self._parameter_overrides.get(name, self._parameter_specs[name]["value"])))
+            return
+        self._set_parameter_value(name, value)
+
+    def _reset_all_parameters(self) -> None:
+        print(f"[debug][sidebar-widget] parameter:reset_all count={len(self._parameter_specs)}", flush=True)
+        for name, spec in self._parameter_specs.items():
+            self._set_parameter_value(name, float(spec["value"]))
+        print("[debug][sidebar-widget] parameter:reset_all:done", flush=True)
+
+    def _run_current_parameters(self) -> None:
+        print(
+            f"[debug][sidebar-widget] parameter:run_start count={len(self._parameter_overrides)} "
+            f"source_len={len(self._parameter_source)}",
+            flush=True,
+        )
+        if self._parameter_rerun_fn is None:
+            print("[debug][sidebar-widget] parameter:run_skipped reason='no_rerun_fn'", flush=True)
+            return
+        active = dict(self._parameter_overrides)
+        self._parameter_rerun_fn(self._parameter_source, active, self._on_parameter_result)
+
+    def _on_parameter_result(self, result: object) -> None:
+        error = getattr(result, "error", None)
+        print(f"[debug][sidebar-widget] parameter:run_result error={bool(error)}", flush=True)
+
+
+class VariablesParameterTable(QTableWidget):
+    """Interactive variables table with a QTextBrowser-like text export."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._plain_rows: list[tuple[str, ...]] = []
+        self.setShowGrid(False)
+        self.setAlternatingRowColors(False)
+        self.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+
+    def set_plain_rows(self, rows: list[tuple[str, ...]]) -> None:
+        self._plain_rows = rows
+
+    def toPlainText(self) -> str:
+        text = "\n".join(" ".join(str(part) for part in row if part) for row in self._plain_rows)
+        print(f"[debug][variables-parameter-table] toPlainText length={len(text)}", flush=True)
+        return text
 
 #-------------------------------------------------------------------------------------------------------------------------
 # -- Note: ExamplesBar

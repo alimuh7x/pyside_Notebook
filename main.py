@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from pyside_app.main_window import MainWindow
@@ -32,6 +34,30 @@ QScrollBar::handle:vertical {
     background: #94a3b8;
     border-radius: 4px;
     min-height: 30px;
+}
+QMenu {
+    background: #2c313a;
+    color: #ffffff;
+    border: 1px solid #3e4451;
+    border-radius: 8px;
+    padding: 4px;
+}
+QMenu::item {
+    color: #ffffff;
+    background: transparent;
+    padding: 6px 26px;
+}
+QMenu::item:selected {
+    color: #ffffff;
+    background: #3e4451;
+}
+QMenu::item:disabled {
+    color: #ffffff;
+}
+QMenu::separator {
+    height: 1px;
+    background: #3e4451;
+    margin: 4px 8px;
 }
 QTabWidget::pane {
     border: none;
@@ -69,6 +95,38 @@ QTextBrowser, QListWidget {
 """
 
 
+def application_icon_path() -> Path:
+    path = Path(__file__).resolve().parent / "assets" / "calculator.png"
+    print(f"[debug][main] app_icon:path path={str(path)!r}", flush=True)
+    print(f"[debug][main] app_icon:exists exists={path.exists()}", flush=True)
+    return path
+
+
+def build_application_icon() -> QIcon:
+    path = application_icon_path()
+    icon = QIcon(str(path))
+    print(f"[debug][main] app_icon:loaded is_null={icon.isNull()}", flush=True)
+    return icon
+
+
+def apply_application_icon(app: QApplication, window: MainWindow) -> QIcon:
+    print("[debug][main] app_icon:apply:start", flush=True)
+    icon = build_application_icon()
+    app.setWindowIcon(icon)
+    print(f"[debug][main] app_icon:apply:app is_null={app.windowIcon().isNull()}", flush=True)
+    window.setWindowIcon(icon)
+    print(f"[debug][main] app_icon:apply:window is_null={window.windowIcon().isNull()}", flush=True)
+    if hasattr(window, "title_bar"):
+        window.title_bar.icon_label.setPixmap(icon.pixmap(18, 18))
+        pixmap = window.title_bar.icon_label.pixmap()
+        print(
+            f"[debug][main] app_icon:apply:title_bar pixmap_is_null={pixmap is None or pixmap.isNull()}",
+            flush=True,
+        )
+    print("[debug][main] app_icon:apply:done", flush=True)
+    return icon
+
+
 def configure_desktop_graphics() -> dict[str, str]:
     print("[debug][main] graphics:configure:start", flush=True)
     defaults = {
@@ -94,7 +152,9 @@ def main() -> int:
     configure_desktop_graphics()
     app = QApplication.instance() or QApplication(sys.argv)
     app.setStyleSheet(GLOBAL_STYLESHEET)
+    print("[debug][main] stylesheet:applied qmenu_text='#ffffff' qmenu_background='#2c313a'", flush=True)
     window = MainWindow()
+    apply_application_icon(app, window)
     window.show()
     print("[debug][main] exec", flush=True)
     return app.exec()

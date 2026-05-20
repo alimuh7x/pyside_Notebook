@@ -34,6 +34,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QGridLayout,
@@ -95,7 +96,8 @@ _CARD_STYLE = """
     QWidget#graphCard QComboBox,
     QWidget#graphCard QLineEdit,
     QWidget#graphCard QListWidget,
-    QWidget#graphCard QSpinBox {
+    QWidget#graphCard QSpinBox,
+    QWidget#graphCard QDoubleSpinBox {
         background:#2c313a; border:1px solid #3e4451;
         border-radius:8px; padding:5px 8px; font-size:14px; font-weight:700; color:#d7dae0;
     }
@@ -451,11 +453,30 @@ class DataSourceWidget(QWidget):
 
         self._btn_group.buttonToggled.connect(self._on_toggle)
 
+        # Per-axis scale rows — always visible
+        self._x_scale_mul, self._x_scale_div, self._x_scale_spin, self._x_scale_grp = \
+            self._make_scale_row("X scale:", root)
+        self._y_scale_mul, self._y_scale_div, self._y_scale_spin, self._y_scale_grp = \
+            self._make_scale_row("Y scale:", root)
+
+        self._x_scale_mul.toggled.connect(lambda _: self.changed.emit())
+        self._x_scale_spin.valueChanged.connect(lambda _: self.changed.emit())
+        self._y_scale_mul.toggled.connect(lambda _: self.changed.emit())
+        self._y_scale_spin.valueChanged.connect(lambda _: self.changed.emit())
+
     # ── public ───────────────────────────────────────────────────────
 
     def active_arrays_1d(self) -> dict[str, np.ndarray]:
-        """Return the 1D arrays from the currently active data source."""
+        """Return the 1D arrays from the currently active data source (unscaled)."""
         return self._csv_arrays if self._csv_radio.isChecked() else self._notebook_arrays
+
+    def x_scale_factor(self) -> float:
+        """Effective X multiplier (negative exponent for ÷ mode)."""
+        return self._effective_factor(self._x_scale_mul, self._x_scale_spin)
+
+    def y_scale_factor(self) -> float:
+        """Effective Y multiplier (negative exponent for ÷ mode)."""
+        return self._effective_factor(self._y_scale_mul, self._y_scale_spin)
 
     def is_csv(self) -> bool:
         """Return whether the widget is currently using CSV-backed data."""
@@ -468,6 +489,38 @@ class DataSourceWidget(QWidget):
             self.changed.emit()
 
     # ── private ──────────────────────────────────────────────────────
+
+    def _make_scale_row(
+        self, label: str, parent_layout: QVBoxLayout
+    ) -> tuple[QRadioButton, QRadioButton, QDoubleSpinBox, QButtonGroup]:
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        row.addWidget(QLabel(label, self))
+        mul_btn = QRadioButton("×", self)
+        div_btn = QRadioButton("÷", self)
+        mul_btn.setChecked(True)
+        grp = QButtonGroup(self)
+        grp.addButton(mul_btn)
+        grp.addButton(div_btn)
+        spin = QDoubleSpinBox(self)
+        spin.setRange(1e-12, 1e12)
+        spin.setDecimals(6)
+        spin.setValue(1.0)
+        spin.setSingleStep(1.0)
+        spin.setFixedWidth(110)
+        row.addWidget(mul_btn)
+        row.addWidget(div_btn)
+        row.addWidget(spin)
+        row.addStretch(1)
+        parent_layout.addLayout(row)
+        return mul_btn, div_btn, spin, grp
+
+    @staticmethod
+    def _effective_factor(mul_btn: QRadioButton, spin: QDoubleSpinBox) -> float:
+        v = spin.value()
+        if mul_btn.isChecked():
+            return v
+        return (1.0 / v) if v != 0.0 else 1.0
 
     def _on_toggle(self, _btn: Any, checked: bool) -> None:
         """Swap visible controls when the active data source changes."""
@@ -485,14 +538,30 @@ class DataSourceWidget(QWidget):
         if not path:
             return
         try:
-            df = pd.read_csv(path, sep=None, engine="python")
+            df = self._read_data_file(path)
             df = df.dropna(how="any")          # align all columns to same rows
             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            if not numeric_cols:
+                # No header row — re-read assigning integer column names
+                df = self._read_data_file(path, header=None)
+                df = df.dropna(how="any")
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                df.columns = [str(c) for c in df.columns]
+                numeric_cols = [str(c) for c in numeric_cols]
             self._csv_arrays = {c: df[c].to_numpy(dtype=float) for c in numeric_cols}
             self._path_label.setText(os.path.basename(path))
             self.changed.emit()
         except Exception as exc:
             self._path_label.setText(f"Error: {exc}")
+
+    @staticmethod
+    def _read_data_file(path: str, **kwargs: Any) -> "pd.DataFrame":
+        """Parse a data file using whitespace or sniffer-detected separator."""
+        suffix = os.path.splitext(path)[1].lower()
+        if suffix == ".csv":
+            return pd.read_csv(path, sep=None, engine="python", **kwargs)
+        # sep=r'\s+' handles single space, multiple spaces, tab, or any mix
+        return pd.read_csv(path, sep=r"\s+", engine="python", **kwargs)
 
 
 # ── AxisSelectorWidget ────────────────────────────────────────────────────────
@@ -1273,11 +1342,13 @@ class GraphBuilderCard(BaseGraphPanel):
             overlay_status = ""
             base_status = f"Evolution: matrix={matrix_var or 'none'}"
         else:
+            x_var  = self._axis_selector.selected_x()
             y_vars = self._axis_selector.selected_y_vars()
+            arrays_1d = self._apply_axis_scales(arrays_1d, x_var, y_vars)
             self._series_style.update_y_vars(y_vars, self._axis_selector.plot_type())
             self._figure = build_notebook_plot_figure(
                 arrays_1d,
-                self._axis_selector.selected_x(),
+                x_var,
                 y_vars,
                 self._axis_selector.plot_type(),
                 self._axis_labels.title(),
@@ -1287,18 +1358,37 @@ class GraphBuilderCard(BaseGraphPanel):
                 style,
             )
             overlay_status = self._analysis.apply_overlays(
-                self._figure, arrays_1d,
-                self._axis_selector.selected_x(), y_vars,
+                self._figure, arrays_1d, x_var, y_vars,
             )
             src = "CSV" if self._data_source.is_csv() else "NB"
             base_status = (
-                f"[{src}]  x={self._axis_selector.selected_x() or 'index'}"
+                f"[{src}]  x={x_var or 'index'}"
                 f"  y={', '.join(y_vars) if y_vars else 'none'}"
             )
 
         self._render_figure(self._plot_view, self._figure, w, h)
         full_status = f"{base_status}  |  {overlay_status}" if overlay_status else base_status
         self._status_label.setText(full_status)
+
+    def _apply_axis_scales(
+        self,
+        arrays: dict[str, np.ndarray],
+        x_var: str | None,
+        y_vars: list[str],
+    ) -> dict[str, np.ndarray]:
+        """Return a copy of arrays with X and Y scale factors applied."""
+        x_sf = self._data_source.x_scale_factor()
+        y_sf = self._data_source.y_scale_factor()
+        if x_sf == 1.0 and y_sf == 1.0:
+            return arrays
+        result = dict(arrays)
+        if x_sf != 1.0 and x_var and x_var in result:
+            result[x_var] = result[x_var] * x_sf
+        if y_sf != 1.0:
+            for yv in y_vars:
+                if yv in result and yv != x_var:
+                    result[yv] = result[yv] * y_sf
+        return result
 
     # ── layout builder ────────────────────────────────────────────────
 

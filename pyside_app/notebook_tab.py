@@ -77,6 +77,31 @@ _NB_GRAPH_COMBO_SS = (
 )
 
 
+def _values_equal(a: object, b: object) -> bool:
+    try:
+        return abs(float(a) - float(b)) < 1e-9
+    except (TypeError, ValueError):
+        return a == b
+
+
+def parameter_change_label(overrides: dict[str, object], previous: dict[str, object]) -> str:
+    """Return a compact label containing only parameters changed from previous."""
+    changed = {
+        key: value
+        for key, value in overrides.items()
+        if key not in previous or not _values_equal(previous[key], value)
+    }
+    if not changed:
+        print("[debug][parameter-label] no_changed_values label='current'", flush=True)
+        return "current"
+    label = "  ".join(
+        f"{key}={value:.4g}" if isinstance(value, float) else f"{key}={value}"
+        for key, value in changed.items()
+    )
+    print(f"[debug][parameter-label] changed={list(changed)} label={label!r}", flush=True)
+    return label
+
+
 class _NotebookUiAdapter(NotebookUiPort):
     def __init__(self, tab: NotebookTab) -> None:
         self.tab = tab
@@ -524,18 +549,13 @@ class NotebookTab(QWidget):
         return wrapper
 
     def set_param_widget(self, widget) -> None:
-        """Swap the parameter slider panel shown above the graph column."""
+        """Keep the legacy graph-column parameter slot hidden."""
+        print("[debug][notebook-tab] set_param_widget legacy_hidden", flush=True)
         if self._param_current_widget is not None:
             self._param_body_layout.removeWidget(self._param_current_widget)
             self._param_current_widget.setParent(None)
-            self._param_current_widget = None
-        if widget is not None:
-            widget.setParent(self._param_section)
-            self._param_body_layout.addWidget(widget)
-            self._param_current_widget = widget
-            self._param_section.show()
-        else:
-            self._param_section.hide()
+        self._param_section.hide()
+        self._param_current_widget = None
 
     def _summarize_namespace_value(self, value: object) -> tuple[str, str]:
         """Convert one namespace value into a compact sidebar summary and type name."""
@@ -648,34 +668,23 @@ class NotebookTab(QWidget):
     def _make_rerun_fn(self):
         """Build a rerun callback and initial-run hook for parameter exploration."""
         from pyside_app.execution_worker import OverrideWorker
-        from pyside_app.cell_widgets import AutoParamPanel
         from pyside_app.execution_engine import detect_cell_parameters
         engine = self.execution_engine
         thread_pool = self.thread_pool
         graph_panel = self.graph_panel_widget
-        tab = self  # for set_param_widget
+        tab = self
 
         _active_workers: list = []
         _prev_overrides: dict = {}
-        _panel_ref: list[AutoParamPanel | None] = [None]
-
-        def _vals_equal(a, b) -> bool:
-            try:
-                return abs(float(a) - float(b)) < 1e-9
-            except (TypeError, ValueError):
-                return a == b
 
         def _ensure_panel(source: str) -> None:
             params = detect_cell_parameters(source)
+            print(f"[debug][notebook-tab] parameter_controls:ensure count={len(params)}", flush=True)
             if params:
-                if _panel_ref[0] is None:
-                    _panel_ref[0] = AutoParamPanel(params, rerun_fn, source)
-                    tab.set_param_widget(_panel_ref[0])
-                else:
-                    _panel_ref[0].update_params(params, source)
+                tab.sidebar_widget.set_parameter_controls(params, source, rerun_fn)
+                tab._refresh_variables_panel()
             else:
-                tab.set_param_widget(None)
-                _panel_ref[0] = None
+                tab.sidebar_widget.clear_parameter_controls()
 
         def on_run_success(source: str, result) -> None:
             """Called after the main Run Cell completes to create the slider panel."""
@@ -696,14 +705,8 @@ class NotebookTab(QWidget):
             def _on_result_and_graph(result) -> None:
                 on_result(result)
                 if result.namespace_snapshot and not result.error:
-                    changed = {
-                        k: v for k, v in _captured_overrides.items()
-                        if k not in _captured_prev or not _vals_equal(_captured_prev[k], v)
-                    } or _captured_overrides
-                    label = "  ".join(
-                        f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}"
-                        for k, v in changed.items()
-                    )
+                    tab._refresh_variables_panel()
+                    label = parameter_change_label(_captured_overrides, _captured_prev)
                     from pyside_app import array_store
                     array_store.store_run(result.namespace_snapshot, label)
                     graph_panel.add_run(result.namespace_snapshot, label)

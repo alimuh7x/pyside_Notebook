@@ -18,6 +18,7 @@ import plotly
 import plotly.graph_objects as go
 import scipy
 
+from pyside_app.auto_history import AutoHistoryRecorder, RECORDER_NAMESPACE_NAME
 from utils.notebook_eval import ALLOWED_NOTEBOOK_FUNCTIONS, PHYSICAL_CONSTANTS, UNIT_CONSTANTS
 
 
@@ -779,8 +780,12 @@ class ExecutionEngine:
         try:
             with self._lock:
                 plt = _prepare_matplotlib()
+                AutoHistoryRecorder.clear_generated(self.namespace)
+                recorder = AutoHistoryRecorder()
+                self.namespace[RECORDER_NAMESPACE_NAME] = recorder
                 exec_tree, last_expr = _split_last_expression(source)
                 if exec_tree.body:
+                    exec_tree = recorder.instrument_tree(exec_tree)
                     compiled = compile(exec_tree, "<desktop-notebook>", "exec")
                     with (
                         contextlib.redirect_stdout(stdout_buffer),
@@ -789,6 +794,8 @@ class ExecutionEngine:
                     ):
                         warnings.filterwarnings("ignore", message="FigureCanvasAgg is non-interactive, and thus cannot be shown")
                         exec(compiled, self.namespace, self.namespace)  # noqa: S102
+                recorder.finalize(self.namespace)
+                self.namespace.pop(RECORDER_NAMESPACE_NAME, None)
                 if last_expr is not None:
                     compiled_expr = compile(ast.Expression(last_expr), "<desktop-notebook-expr>", "eval")
                     with (
@@ -806,6 +813,8 @@ class ExecutionEngine:
                     plt.close("all")
                     print("[debug][execution-engine] matplotlib:closed_all", flush=True)
         except Exception:
+            with contextlib.suppress(Exception):
+                self.namespace.pop(RECORDER_NAMESPACE_NAME, None)
             result.error = traceback.format_exc()
             print(f"[debug][execution-engine] execute:error error={result.error!r}", flush=True)
 
@@ -842,16 +851,20 @@ class ExecutionEngine:
         # alias with self.namespace or with earlier slider-run snapshots.
         with self._lock:
             ns_snap = {
-                k: (v.copy() if isinstance(v, np.ndarray) else v)
+                k: (v.copy() if isinstance(v, np.ndarray) else set(v) if isinstance(v, set) else v)
                 for k, v in self.namespace.items()
             }
+        AutoHistoryRecorder.clear_generated(ns_snap)
 
         stdout_buf = io.StringIO()
         stderr_buf = io.StringIO()
         try:
             plt = _prepare_matplotlib()
+            recorder = AutoHistoryRecorder()
+            ns_snap[RECORDER_NAMESPACE_NAME] = recorder
             exec_tree, last_expr = _split_last_expression(full_source)
             if exec_tree.body:
+                exec_tree = recorder.instrument_tree(exec_tree)
                 compiled = compile(exec_tree, "<param-explore>", "exec")
                 with (
                     contextlib.redirect_stdout(stdout_buf),
@@ -860,6 +873,8 @@ class ExecutionEngine:
                 ):
                     warnings.filterwarnings("ignore", message="FigureCanvasAgg is non-interactive")
                     exec(compiled, ns_snap, ns_snap)  # noqa: S102
+            recorder.finalize(ns_snap)
+            ns_snap.pop(RECORDER_NAMESPACE_NAME, None)
             if last_expr is not None:
                 compiled_expr = compile(ast.Expression(last_expr), "<param-explore-expr>", "eval")
                 with (
@@ -876,6 +891,8 @@ class ExecutionEngine:
             if plt is not None:
                 plt.close("all")
         except Exception:
+            with contextlib.suppress(Exception):
+                ns_snap.pop(RECORDER_NAMESPACE_NAME, None)
             result.error = traceback.format_exc()
 
         result.stdout = stdout_buf.getvalue()
