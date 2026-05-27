@@ -132,7 +132,8 @@ def test_formula_plot_tab_styles_combo_popups_with_readable_text():
 
     assert "QComboBox QAbstractItemView" in stylesheet
     assert "color: #f8fafc" in stylesheet
-    assert "selection-background-color: #3e4451" in stylesheet
+    assert "selection-background-color: #61afef" in stylesheet
+    assert "QCheckBox::indicator:checked" in stylesheet
 
 
 def test_formula_plot_tab_uses_dash_structure_with_dark_theme():

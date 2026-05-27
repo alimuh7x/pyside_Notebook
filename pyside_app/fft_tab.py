@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -24,6 +25,10 @@ from PySide6.QtWidgets import (
 
 from pyside_app.plot_view import PlotView
 
+_ASSET_DIR = Path(__file__).resolve().parents[1] / "assets"
+_ARROW_UP = str(_ASSET_DIR / "qt_arrow_up.svg").replace("\\", "/")
+_ARROW_DOWN = str(_ASSET_DIR / "qt_arrow_down.svg").replace("\\", "/")
+
 _LABEL_SS = "color:#e5c07b; font-size:14px; font-weight:700;"
 _TEXT_SS = "color:#d7dae0; font-size:14px;"
 _BTN_PRIMARY = (
@@ -36,9 +41,22 @@ _BTN_SECONDARY = (
 )
 _COMBO_SS = (
     "QComboBox { background:#2c313a; border:1px solid #3e4451; border-radius:6px;"
-    " padding:4px 8px; font-size:14px; color:#d7dae0; min-height:28px; }"
+    " padding:4px 28px 4px 8px; font-size:14px; color:#d7dae0; min-height:28px; }"
+    "QComboBox::drop-down { subcontrol-origin:padding; subcontrol-position:right center;"
+    " width:22px; border-left:1px solid #3e4451; background:#3e4451; }"
+    f"QComboBox::down-arrow {{ image:url({_ARROW_DOWN}); width:10px; height:10px; }}"
     "QComboBox QAbstractItemView { background:#2c313a; color:#d7dae0;"
     " selection-background-color:#3e4451; selection-color:#61afef; }"
+)
+_SPIN_SS = (
+    "QDoubleSpinBox { border:1px solid #3e4451; border-radius:6px; padding:4px 28px 4px 6px;"
+    " font-size:14px; color:#d7dae0; background:#2c313a; min-height:28px; }"
+    "QDoubleSpinBox::up-button { subcontrol-origin:border; subcontrol-position:top right;"
+    " width:22px; border-left:1px solid #3e4451; background:#3e4451; }"
+    "QDoubleSpinBox::down-button { subcontrol-origin:border; subcontrol-position:bottom right;"
+    " width:22px; border-left:1px solid #3e4451; background:#3e4451; }"
+    f"QDoubleSpinBox::up-arrow {{ image:url({_ARROW_UP}); width:10px; height:10px; }}"
+    f"QDoubleSpinBox::down-arrow {{ image:url({_ARROW_DOWN}); width:10px; height:10px; }}"
 )
 _SLIDER_SS = (
     "QSlider::groove:horizontal { height:6px; border-radius:3px; background:#3e4451; }"
@@ -101,10 +119,7 @@ class FFTTab(QWidget):
         self.fs_spin.setValue(1.0)
         self.fs_spin.setDecimals(4)
         self.fs_spin.setSuffix("  Hz")
-        self.fs_spin.setStyleSheet(
-            "QDoubleSpinBox { border:1px solid #3e4451; border-radius:6px; padding:4px 6px;"
-            " font-size:14px; color:#d7dae0; background:#2c313a; min-height:28px; }"
-        )
+        self.fs_spin.setStyleSheet(_SPIN_SS)
         sig_form.addRow(QLabel("Sample rate:", sig_frame), self.fs_spin)
         sig_frame.layout().addLayout(sig_form)
         controls_layout.addWidget(sig_frame)
@@ -151,10 +166,7 @@ class FFTTab(QWidget):
         self.cutoff_low_spin.setRange(0, 1e9)
         self.cutoff_low_spin.setValue(100.0)
         self.cutoff_low_spin.setSuffix("  Hz")
-        self.cutoff_low_spin.setStyleSheet(
-            "QDoubleSpinBox { border:1px solid #3e4451; border-radius:6px; padding:4px 6px;"
-            " font-size:14px; color:#d7dae0; background:#2c313a; min-height:28px; }"
-        )
+        self.cutoff_low_spin.setStyleSheet(_SPIN_SS)
         self._cutoff_low_label = QLabel("Cutoff:", filt_frame)
         filt_form.addRow(self._cutoff_low_label, self.cutoff_low_spin)
 
@@ -162,10 +174,7 @@ class FFTTab(QWidget):
         self.cutoff_high_spin.setRange(0, 1e9)
         self.cutoff_high_spin.setValue(500.0)
         self.cutoff_high_spin.setSuffix("  Hz")
-        self.cutoff_high_spin.setStyleSheet(
-            "QDoubleSpinBox { border:1px solid #3e4451; border-radius:6px; padding:4px 6px;"
-            " font-size:14px; color:#d7dae0; background:#2c313a; min-height:28px; }"
-        )
+        self.cutoff_high_spin.setStyleSheet(_SPIN_SS)
         self._cutoff_high_row_label = QLabel("High cutoff:", filt_frame)
         filt_form.addRow(self._cutoff_high_row_label, self.cutoff_high_spin)
 
@@ -173,10 +182,7 @@ class FFTTab(QWidget):
         self.order_spin.setRange(1, 10)
         self.order_spin.setValue(4)
         self.order_spin.setDecimals(0)
-        self.order_spin.setStyleSheet(
-            "QDoubleSpinBox { border:1px solid #3e4451; border-radius:6px; padding:4px 6px;"
-            " font-size:14px; color:#d7dae0; background:#2c313a; min-height:28px; }"
-        )
+        self.order_spin.setStyleSheet(_SPIN_SS)
         filt_form.addRow(QLabel("Order:", filt_frame), self.order_spin)
         filt_frame.layout().addLayout(filt_form)
         controls_layout.addWidget(filt_frame)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import os
 import tempfile
 import uuid
 from pathlib import Path
@@ -17,6 +18,34 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+_WEBGL_CHROMIUM_FLAGS = (
+    "--enable-webgl",
+    "--ignore-gpu-blocklist",
+    "--enable-gpu-rasterization",
+    "--enable-unsafe-swiftshader",
+)
+
+
+def _request_webgl_chromium_flags() -> str:
+    """Request WebGL support before Qt WebEngine is imported."""
+    current = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+    parts = [part for part in current.split() if part not in {"--disable-gpu", "--disable-gpu-compositing"}]
+    for flag in _WEBGL_CHROMIUM_FLAGS:
+        if flag not in parts:
+            parts.append(flag)
+    value = " ".join(parts).strip()
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = value
+    print(f"[debug][plot-view] webgl:chromium_flags={value!r}", flush=True)
+    return value
+
+
+_request_webgl_chromium_flags()
+
+try:
+    from PySide6.QtWebEngineCore import QWebEngineSettings
+except Exception:  # pragma: no cover - environment-specific fallback
+    QWebEngineSettings = None
 
 try:
     from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -45,6 +74,7 @@ class PlotView(QWidget):
         self._html_dir = Path(tempfile.gettempdir()) / "calculation_notebook_plotview"
         self._html_dir.mkdir(parents=True, exist_ok=True)
         self._html_path = self._html_dir / f"plot-{uuid.uuid4().hex}.html"
+        self._load_revision = 0
         self.setMinimumHeight(420)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._layout = QVBoxLayout(self)
@@ -71,6 +101,7 @@ class PlotView(QWidget):
 
         if QWebEngineView is not None:
             self._view: QWidget = QWebEngineView(self)
+            self._enable_webgl()
         else:
             self._view = QTextBrowser(self)
         self._view.setMinimumHeight(420)
@@ -83,6 +114,27 @@ class PlotView(QWidget):
         self.destroyed.connect(self._cleanup_temp_file)
         if hasattr(self._view, "loadFinished"):
             self._view.loadFinished.connect(self._on_load_finished)
+
+    def _enable_webgl(self) -> None:
+        """Enable WebEngine settings needed by Plotly 3D traces."""
+        if QWebEngineSettings is None or QWebEngineView is None or not isinstance(self._view, QWebEngineView):
+            print("[debug][plot-view] webgl:settings_unavailable", flush=True)
+            return
+        settings = self._view.settings()
+        attribute_names = (
+            "JavascriptEnabled",
+            "WebGLEnabled",
+            "Accelerated2dCanvasEnabled",
+            "LocalContentCanAccessFileUrls",
+            "LocalContentCanAccessRemoteUrls",
+        )
+        for name in attribute_names:
+            attr = getattr(QWebEngineSettings.WebAttribute, name, None)
+            if attr is None:
+                print(f"[debug][plot-view] webgl:attribute_missing name={name!r}", flush=True)
+                continue
+            settings.setAttribute(attr, True)
+            print(f"[debug][plot-view] webgl:attribute_enabled name={name!r}", flush=True)
 
     def _on_load_finished(self, ok: bool) -> None:
         """Log the result of a WebEngine HTML load."""
@@ -183,6 +235,8 @@ class PlotView(QWidget):
         if hasattr(self._view, "load") and QWebEngineView is not None and isinstance(self._view, QWebEngineView):
             self._html_path.write_text(wrapped_html, encoding="utf-8")
             file_url = QUrl.fromLocalFile(str(self._html_path))
+            self._load_revision += 1
+            file_url.setQuery(f"v={self._load_revision}")
             print(f"[debug][plot-view] set_html:file_load url={file_url.toString()!r}", flush=True)
             self._view.load(file_url)
         elif hasattr(self._view, "setHtml"):

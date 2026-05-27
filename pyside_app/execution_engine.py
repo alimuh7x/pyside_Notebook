@@ -794,8 +794,6 @@ class ExecutionEngine:
                     ):
                         warnings.filterwarnings("ignore", message="FigureCanvasAgg is non-interactive, and thus cannot be shown")
                         exec(compiled, self.namespace, self.namespace)  # noqa: S102
-                recorder.finalize(self.namespace)
-                self.namespace.pop(RECORDER_NAMESPACE_NAME, None)
                 if last_expr is not None:
                     compiled_expr = compile(ast.Expression(last_expr), "<desktop-notebook-expr>", "eval")
                     with (
@@ -808,6 +806,8 @@ class ExecutionEngine:
                     output = _output_from_value(value)
                     if output is not None:
                         result.outputs.append(output)
+                recorder.finalize(self.namespace)
+                self.namespace.pop(RECORDER_NAMESPACE_NAME, None)
                 result.outputs.extend(_collect_matplotlib_outputs(plt))
                 if plt is not None:
                     plt.close("all")
@@ -873,8 +873,6 @@ class ExecutionEngine:
                 ):
                     warnings.filterwarnings("ignore", message="FigureCanvasAgg is non-interactive")
                     exec(compiled, ns_snap, ns_snap)  # noqa: S102
-            recorder.finalize(ns_snap)
-            ns_snap.pop(RECORDER_NAMESPACE_NAME, None)
             if last_expr is not None:
                 compiled_expr = compile(ast.Expression(last_expr), "<param-explore-expr>", "eval")
                 with (
@@ -887,6 +885,8 @@ class ExecutionEngine:
                 out = _output_from_value(value)
                 if out is not None:
                     result.outputs.append(out)
+            recorder.finalize(ns_snap)
+            ns_snap.pop(RECORDER_NAMESPACE_NAME, None)
             result.outputs.extend(_collect_matplotlib_outputs(plt))
             if plt is not None:
                 plt.close("all")

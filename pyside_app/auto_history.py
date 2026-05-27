@@ -21,35 +21,30 @@ class _ArraySeries:
 class AutoHistoryRecorder:
     """Record numeric arrays that evolve inside instrumented range loops."""
 
-    def __init__(self, max_saved_frames: int = 5, max_memory_mb: int = 256) -> None:
+    def __init__(self, max_saved_frames: int = 100, max_memory_mb: int = 256) -> None:
         self.max_saved_frames = max(1, int(max_saved_frames))
         self.max_memory_bytes = max(1, int(max_memory_mb)) * 1024 * 1024
         self._arrays: dict[str, _ArraySeries] = {}
         self._loop_values: dict[str, list[Any]] = {}
-        print(
-            f"[debug][auto-history] init max_saved_frames={self.max_saved_frames} "
-            f"max_memory_mb={max_memory_mb}",
-            flush=True,
-        )
+        self._loop_dt_values: dict[str, list[float]] = {}
 
     def instrument(self, source: str) -> ast.Module:
         """Parse and instrument source code for auto-history sampling."""
-        print("[debug][auto-history] scan:start", flush=True)
         tree = ast.parse(source)
         return self.instrument_tree(tree)
 
     def instrument_tree(self, tree: ast.Module) -> ast.Module:
         """Insert sampling calls after eligible loop bodies."""
-        print("[debug][auto-history] instrument_tree:start", flush=True)
         transformed = _HistoryLoopTransformer().visit(tree)
         ast.fix_missing_locations(transformed)
-        print("[debug][auto-history] instrument_tree:done", flush=True)
         return transformed
 
     def sample(self, loop_name: str, loop_value: Any, namespace: dict[str, Any]) -> None:
         """Capture current numeric arrays from one loop iteration."""
         self._loop_values.setdefault(loop_name, []).append(loop_value)
-        print(f"[debug][auto-history] sample loop={loop_name!r} value={loop_value!r}", flush=True)
+        dt_value = namespace.get("dt")
+        if isinstance(dt_value, (int, float, np.number)) and np.isfinite(float(dt_value)):
+            self._loop_dt_values.setdefault(loop_name, []).append(float(dt_value))
         for name, value in list(namespace.items()):
             if not self._should_consider_name(name):
                 continue
@@ -64,28 +59,20 @@ class AutoHistoryRecorder:
             if series.frames:
                 previous = series.frames[-1]
                 if previous.shape != frame.shape:
-                    print(
-                        f"[debug][auto-history] drop shape_changed name={name!r} "
-                        f"old={previous.shape} new={frame.shape}",
-                        flush=True,
-                    )
                     self._arrays.pop(name, None)
                     continue
                 if not np.array_equal(previous, frame):
                     series.changed = True
             series.frames.append(frame)
-            print(f"[debug][auto-history] captured name={name!r} shape={frame.shape}", flush=True)
 
     def finalize(self, namespace: dict[str, Any]) -> dict[str, np.ndarray]:
         """Create history arrays in namespace and return the generated arrays."""
-        print("[debug][auto-history] finalize:start", flush=True)
         generated: dict[str, np.ndarray] = {}
         primary_loop_name, loop_values = self._primary_loop()
         keep_indices_by_length: dict[int, np.ndarray] = {}
 
         for name, series in sorted(self._arrays.items()):
             if not series.changed or len(series.frames) < 2:
-                print(f"[debug][auto-history] skip unchanged name={name!r}", flush=True)
                 continue
             frame_count = len(series.frames)
             keep_indices = keep_indices_by_length.get(frame_count)
@@ -97,11 +84,10 @@ class AutoHistoryRecorder:
             namespace[history_name] = history
             self._mark_generated(namespace, history_name)
             generated[history_name] = history
-            print(
-                f"[debug][auto-history] created name={history_name!r} source={name!r} "
-                f"shape={history.shape}",
-                flush=True,
-            )
+            if name not in namespace:
+                namespace[name] = history[-1].copy()
+                self._mark_generated(namespace, name)
+                generated[name] = namespace[name]
 
         if generated and primary_loop_name and loop_values:
             sample_count = next(iter(generated.values())).shape[0]
@@ -111,24 +97,28 @@ class AutoHistoryRecorder:
             namespace[loop_history_name] = sampled_loop_values
             self._mark_generated(namespace, loop_history_name)
             generated[loop_history_name] = sampled_loop_values
-            print(
-                f"[debug][auto-history] created name={loop_history_name!r} "
-                f"shape={sampled_loop_values.shape}",
-                flush=True,
-            )
-            if "dt" in namespace:
+            dt_value = self._time_step_value(primary_loop_name, namespace)
+            if dt_value is not None:
                 try:
-                    time_values = sampled_loop_values * float(namespace["dt"])
+                    time_values = sampled_loop_values * dt_value
                     time_name = self._history_name("time", namespace)
                     namespace[time_name] = time_values
                     self._mark_generated(namespace, time_name)
                     generated[time_name] = time_values
-                    print(f"[debug][auto-history] created name={time_name!r} shape={time_values.shape}", flush=True)
                 except (TypeError, ValueError):
-                    print("[debug][auto-history] time_history skipped invalid_dt", flush=True)
+                    pass
 
-        print(f"[debug][auto-history] finalize:done generated={list(generated)}", flush=True)
         return generated
+
+    def _time_step_value(self, primary_loop_name: str, namespace: dict[str, Any]) -> float | None:
+        """Return global or loop-local dt for sampled time-history creation."""
+        dt_value = namespace.get("dt")
+        if isinstance(dt_value, (int, float, np.number)) and np.isfinite(float(dt_value)):
+            return float(dt_value)
+        local_values = self._loop_dt_values.get(primary_loop_name) or []
+        if not local_values:
+            return None
+        return float(local_values[-1])
 
     @staticmethod
     def clear_generated(namespace: dict[str, Any]) -> None:
@@ -136,7 +126,6 @@ class AutoHistoryRecorder:
         names = namespace.get(GENERATED_HISTORY_NAMES)
         if not isinstance(names, set):
             return
-        print(f"[debug][auto-history] clear_generated names={sorted(names)!r}", flush=True)
         for name in list(names):
             namespace.pop(name, None)
         names.clear()
@@ -181,12 +170,6 @@ class AutoHistoryRecorder:
         bytes_per_frame = max(1, int(frames[0].nbytes))
         memory_limited_frames = max(1, self.max_memory_bytes // bytes_per_frame)
         target_count = min(frame_count, self.max_saved_frames, memory_limited_frames)
-        if target_count < frame_count:
-            print(
-                f"[debug][auto-history] downsample frames={frame_count} target={target_count} "
-                f"bytes_per_frame={bytes_per_frame}",
-                flush=True,
-            )
         return self._matching_keep_indices(frame_count, target_count)
 
     @staticmethod
@@ -208,11 +191,6 @@ class _HistoryLoopTransformer(ast.NodeTransformer):
         if not isinstance(node.target, ast.Name):
             return node
         assigned_names = self._assigned_names(node)
-        print(
-            f"[debug][auto-history] loop_found target={node.target.id!r} "
-            f"assigned={sorted(assigned_names)!r}",
-            flush=True,
-        )
         if not assigned_names:
             return node
         node.body.append(self._sample_expr(node.target.id))

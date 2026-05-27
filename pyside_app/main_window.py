@@ -1,7 +1,22 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QGraphicsDropShadowEffect, QMainWindow, QTabWidget, QToolButton, QVBoxLayout, QWidget
+from pathlib import Path
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QMainWindow,
+    QPushButton,
+    QSizePolicy,
+    QTabBar,
+    QTabWidget,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from pyside_app.fft_tab import FFTTab
 from pyside_app.formula_plot_tab import FormulaPlotTab
@@ -9,6 +24,11 @@ from pyside_app.graph_state import NotebookGraphState
 from pyside_app.graphs_tab import GraphsTab
 from pyside_app.notebook_tab import NotebookTab
 from pyside_app.title_bar import TitleBar
+
+
+_ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+_PLUS_ICON = _ASSETS_DIR / "plus.png"
+_REMOVE_ICON = _ASSETS_DIR / "remove.png"
 
 
 class WorkspaceSession(QWidget):
@@ -30,7 +50,7 @@ class WorkspaceSession(QWidget):
             "QTabWidget::pane { background:#21252b; border:none; }"
             "QTabBar::tab { background:#21252b; color:#5c6370; padding:7px 18px;"
             " border:none; border-bottom:2px solid transparent; font-size:14px; font-weight:700; }"
-            "QTabBar::tab:selected { color:#d7dae0; border-bottom:2px solid #61afef; }"
+            "QTabBar::tab:selected { background:#2c313a; color:#ffffff; border-bottom:3px solid #61afef; }"
             "QTabBar::tab:hover { color:#d7dae0; background:#282c34; }"
         )
         print(f"[debug][workspace-session] workspace_tabs:new title={title!r}", flush=True)
@@ -51,6 +71,45 @@ class WorkspaceSession(QWidget):
         self.workspace_tabs.addTab(self.fft_tab, "FFT Analysis")
         self.root_layout.addWidget(self.workspace_tabs)
         print(f"[debug][workspace-session] init:done title={title!r} inner_tabs={self.workspace_tabs.count()}", flush=True)
+
+
+class SessionTabBar(QTabBar):
+    """Tab bar with a trailing add button kept next to the open tabs."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.add_button = QToolButton(self)
+        self.add_button.setToolTip("New clean notebook tab")
+        self.add_button.setFixedSize(26, 26)
+        self.add_button.setIcon(QIcon(str(_PLUS_ICON)))
+        self.add_button.setIconSize(QSize(18, 18))
+        self.add_button.setStyleSheet(
+            "QToolButton { background:transparent; border:none; border-radius:4px; padding:4px; }"
+            "QToolButton:hover { background:#353b45; }"
+        )
+        self._position_add_button()
+
+    def tabLayoutChange(self) -> None:
+        """Reposition the add button whenever tabs are added, removed, or moved."""
+        super().tabLayoutChange()
+        self._position_add_button()
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        """Keep the add button aligned after resizes."""
+        super().resizeEvent(event)
+        self._position_add_button()
+
+    def _position_add_button(self) -> None:
+        """Place the add button directly after the last visible tab."""
+        if self.count() == 0:
+            x = 4
+            y = 4
+        else:
+            last_tab = self.tabRect(self.count() - 1)
+            x = last_tab.right() + 4
+            y = last_tab.top() + max(0, (last_tab.height() - self.add_button.height()) // 2)
+        self.add_button.move(x, y)
+        self.setMinimumWidth(x + self.add_button.width() + 6)
 
 
 class MainWindow(QMainWindow):
@@ -107,29 +166,27 @@ class MainWindow(QMainWindow):
         self._session_counter = 0
         print("[debug][main-window] session_tabs:init", flush=True)
         self.session_tabs = QTabWidget(self.content_widget)
-        self.session_tabs.setTabsClosable(True)
+        self.session_tab_bar = SessionTabBar(self.session_tabs)
+        self.session_tabs.setTabBar(self.session_tab_bar)
+        self.session_tabs.setTabsClosable(False)
         self.session_tabs.setMovable(True)
         self.session_tabs.setDocumentMode(True)
         self.session_tabs.setStyleSheet(
             "QTabWidget::pane { background:#21252b; border:none; }"
-            "QTabBar::tab { background:#2c313a; color:#d7dae0; padding:8px 18px;"
-            " border:none; border-right:1px solid #21252b; font-size:14px; font-weight:700; }"
-            "QTabBar::tab:selected { background:#3e4451; color:#ffffff; }"
+            "QTabBar::tab { background:#2c313a; color:#f1f5f9; padding:8px 14px 9px 12px;"
+            " min-width:112px; border:none; border-right:1px solid #21252b;"
+            " border-bottom:3px solid transparent; font-size:14px; font-weight:700; }"
+            "QTabBar::tab:selected { background:#3e4451; color:#ffffff; border-bottom:3px solid #61afef; }"
             "QTabBar::tab:hover { background:#353b45; color:#ffffff; }"
+            "QWidget#sessionTabCloseContainer { background:transparent; border:none; }"
+            "QPushButton#sessionTabCloseButton { background:transparent; border:none; padding:1px; }"
+            "QPushButton#sessionTabCloseButton:hover { background:#4b5563; border-radius:4px; }"
         )
         self.session_tabs.currentChanged.connect(self._sync_current_session_aliases)
         self.session_tabs.tabCloseRequested.connect(self.close_workspace_session)
 
-        self.add_session_button = QToolButton(self.session_tabs)
-        self.add_session_button.setText("+")
-        self.add_session_button.setToolTip("New clean notebook tab")
+        self.add_session_button = self.session_tab_bar.add_button
         self.add_session_button.clicked.connect(lambda _checked=False: self.add_workspace_session())
-        self.add_session_button.setStyleSheet(
-            "QToolButton { background:#001f41; color:white; border:none; border-radius:6px;"
-            " padding:4px 10px; font-size:16px; font-weight:700; }"
-            "QToolButton:hover { background:#b60021; }"
-        )
-        self.session_tabs.setCornerWidget(self.add_session_button, Qt.Corner.TopRightCorner)
         self.content_layout.addWidget(self.session_tabs)
         self.add_workspace_session()
         surface_layout.addWidget(self.content_widget, 1)
@@ -157,6 +214,7 @@ class MainWindow(QMainWindow):
         print(f"[debug][main-window] session_tab:add:start title={title!r}", flush=True)
         session = WorkspaceSession(title, self.session_tabs)
         index = self.session_tabs.addTab(session, title)
+        self._install_session_tab_header(index, title)
         self.session_tabs.setCurrentIndex(index)
         self._sync_current_session_aliases(index)
         print(
@@ -164,6 +222,41 @@ class MainWindow(QMainWindow):
             flush=True,
         )
         return session
+
+    def _install_session_tab_header(self, index: int, title: str) -> None:
+        """Attach the custom tab header used for top-level workspace tabs."""
+        print(f"[debug][main-window] session_tab:header index={index} title={title!r}", flush=True)
+        close_container = QWidget(self.session_tab_bar)
+        close_container.setObjectName("sessionTabCloseContainer")
+        close_container.setFixedSize(36, 25)
+        close_layout = QHBoxLayout(close_container)
+        close_layout.setContentsMargins(0, 0, 14, 3)
+        close_layout.setSpacing(0)
+
+        close_button = QPushButton(close_container)
+        close_button.setObjectName("sessionTabCloseButton")
+        close_button.setFlat(True)
+        close_button.setFixedSize(20, 20)
+        close_button.setIcon(QIcon(str(_REMOVE_ICON)))
+        close_button.setIconSize(QSize(17, 17))
+        close_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        close_layout.addWidget(close_button)
+        close_button.clicked.connect(lambda _checked=False, b=close_button: self._close_session_button_tab(b))
+        self.session_tabs.setTabText(index, title)
+        self.session_tab_bar.setTabButton(index, QTabBar.ButtonPosition.RightSide, close_container)
+
+    def _close_session_button_tab(self, button: QPushButton | None) -> None:
+        """Close the session associated with a right-side tab close button."""
+        if button is None:
+            print("[debug][main-window] session_tab:button_close skipped reason='missing_button'", flush=True)
+            return
+        for index in range(self.session_tab_bar.count()):
+            container = self.session_tab_bar.tabButton(index, QTabBar.ButtonPosition.RightSide)
+            if container is button.parent():
+                print(f"[debug][main-window] session_tab:button_close index={index}", flush=True)
+                self.close_workspace_session(index)
+                return
+        print("[debug][main-window] session_tab:button_close skipped reason='button_not_found'", flush=True)
 
     def close_workspace_session(self, index: int) -> None:
         """Close one workspace tab while keeping at least one clean session open."""
@@ -175,7 +268,7 @@ class MainWindow(QMainWindow):
             print("[debug][main-window] session_tab:close:blocked reason='last_tab'", flush=True)
             return
         session = self.session_tabs.widget(index)
-        title = self.session_tabs.tabText(index)
+        title = session.title if isinstance(session, WorkspaceSession) else self.session_tabs.tabText(index)
         self.session_tabs.removeTab(index)
         if session is not None:
             session.deleteLater()

@@ -4,7 +4,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton, QTabBar
 from PySide6.QtCore import QElapsedTimer
 from PySide6.QtCore import QModelIndex
 from PySide6.QtCore import QObject, Qt, Signal
@@ -17,7 +17,17 @@ from pyside_app.main_window import MainWindow
 from pyside_app.execution_engine import ExecutionOutput, ExecutionResult, detect_cell_parameters
 from pyside_app.markdown_preview import build_markdown_preview_html, katex_assets_dir, MarkdownPreview
 from pyside_app.notebook_tab import NotebookTab, parameter_change_label
+from pyside_app import plot_view
 from pyside_app.plot_view import PlotView
+
+
+def _session_tab_label(window: MainWindow, index: int) -> str:
+    return window.session_tabs.tabText(index)
+
+
+def _session_tab_close_button(window: MainWindow, index: int):
+    container = window.session_tabs.tabBar().tabButton(index, QTabBar.ButtonPosition.RightSide)
+    return container.findChild(QPushButton, "sessionTabCloseButton")
 
 
 class FakeLspClient(QObject):
@@ -88,7 +98,9 @@ def test_main_window_exposes_tabbed_notebook_and_graphs_shell():
     assert window.title_bar.window() is window
     assert window.content_layout.indexOf(window.session_tabs) >= 0
     assert window.session_tabs.count() == 1
-    assert window.session_tabs.tabText(0) == "Tab 1"
+    assert _session_tab_label(window, 0) == "Tab 1"
+    assert not _session_tab_close_button(window, 0).icon().isNull()
+    assert not window.add_session_button.icon().isNull()
     assert window.workspace_tabs.count() == 4
     assert window.workspace_tabs.tabText(0) == "Notebook"
     assert window.workspace_tabs.tabText(1) == "Graphs"
@@ -125,11 +137,29 @@ def test_main_window_session_tabs_create_independent_clean_workspaces():
     second_session = window.add_workspace_session()
 
     assert window.session_tabs.count() == 2
-    assert window.session_tabs.tabText(1) == "Tab 2"
+    assert _session_tab_label(window, 1) == "Tab 2"
     assert second_session is not first_session
     assert second_session.notebook_tab is not first_notebook
     assert second_session.graph_state is not first_graph_state
     assert second_session.notebook_tab.cells[0].editor.toPlainText() == ""
+
+
+def test_main_window_add_session_button_sits_after_session_tabs():
+    _app()
+
+    window = MainWindow()
+    window.add_workspace_session()
+    QApplication.processEvents()
+
+    tab_bar = window.session_tabs.tabBar()
+    button = window.add_session_button
+    last_tab = tab_bar.tabRect(tab_bar.count() - 1)
+
+    assert button.parent() is tab_bar
+    assert window.session_tabs.cornerWidget(Qt.Corner.TopRightCorner) is None
+    assert button.x() > last_tab.right()
+    assert button.y() >= last_tab.top()
+    assert button.y() + button.height() <= last_tab.bottom() + 1
 
 
 def test_main_window_session_tabs_close_but_keep_one_workspace():
@@ -143,7 +173,7 @@ def test_main_window_session_tabs_close_but_keep_one_workspace():
 
     window.close_workspace_session(0)
     assert window.session_tabs.count() == 1
-    assert window.session_tabs.tabText(0) == "Tab 1"
+    assert _session_tab_label(window, 0) == "Tab 1"
 
 
 def test_notebook_tab_uses_workspace_scroll_instead_of_inner_cell_scroll_area():
@@ -768,14 +798,15 @@ def test_plot_view_has_real_embedded_height():
     assert view._view.minimumHeight() >= 420
 
 
-def test_shared_combo_boxes_force_light_popup_background():
+def test_shared_combo_boxes_use_visible_dark_selection_style():
     _app()
     combo = AutoCloseComboBox()
     checkable = CheckableComboBox()
 
-    assert "background:#ffffff" in combo.view().styleSheet()
-    assert "selection-background-color:#c7def5" in combo.view().styleSheet()
-    assert "background:#ffffff" in checkable.view().styleSheet()
+    assert "background:#2c313a" in combo.view().styleSheet()
+    assert "selection-background-color:#61afef" in combo.view().styleSheet()
+    assert "selection-color:#0b1220" in combo.view().styleSheet()
+    assert "QAbstractItemView::indicator:checked" in checkable.view().styleSheet()
 
 
 def test_plot_view_wrapper_hides_internal_scroll_and_loads_local_mathjax():
@@ -787,6 +818,38 @@ def test_plot_view_wrapper_hides_internal_scroll_and_loads_local_mathjax():
 
     assert "overflow: hidden" in wrapped_html
     assert "tex-svg.js" in wrapped_html
+
+
+def test_plot_view_cache_busts_repeated_local_file_loads():
+    _app()
+    view = PlotView()
+
+    view.set_html("<div>first plot</div>")
+    first_revision = view._load_revision
+    view.set_html("<div>second plot</div>")
+
+    assert first_revision == 1
+    assert view._load_revision == 2
+    assert "second plot" in view._html_path.read_text(encoding="utf-8")
+
+
+def test_plot_view_requests_webgl_for_plotly_surface():
+    _app()
+    view = PlotView()
+
+    flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+    assert "--enable-webgl" in flags
+    assert "--ignore-gpu-blocklist" in flags
+    assert "--disable-gpu" not in flags.split()
+    assert "--disable-gpu-compositing" not in flags.split()
+
+    if plot_view.QWebEngineSettings is None or plot_view.QWebEngineView is None:
+        return
+    if not isinstance(view._view, plot_view.QWebEngineView):
+        return
+    webgl_attr = getattr(plot_view.QWebEngineSettings.WebAttribute, "WebGLEnabled", None)
+    if webgl_attr is not None:
+        assert view._view.settings().testAttribute(webgl_attr) is True
 
 
 def test_notebook_tab_uses_multi_graph_workspace_for_latest_plot():
@@ -835,7 +898,8 @@ def test_configure_desktop_graphics_sets_software_rendering():
 
     assert config["QT_OPENGL"] == "software"
     assert config["LIBGL_ALWAYS_SOFTWARE"] == "1"
-    assert "--disable-gpu" in config["QTWEBENGINE_CHROMIUM_FLAGS"]
+    assert "--enable-webgl" in config["QTWEBENGINE_CHROMIUM_FLAGS"]
+    assert "--disable-gpu" not in config["QTWEBENGINE_CHROMIUM_FLAGS"].split()
 
 
 def test_graph_panel_uses_source_line_as_title():

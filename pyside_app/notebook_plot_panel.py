@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 from abc import abstractmethod
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -89,6 +90,9 @@ GRAPH_SIZE_OPTIONS = (
     ("Square", (700, 700)),
     ("700 × 700", (700, 700)),
 )
+_ASSET_DIR = Path(__file__).resolve().parents[1] / "assets"
+_ARROW_UP = str(_ASSET_DIR / "qt_arrow_up.svg").replace("\\", "/")
+_ARROW_DOWN = str(_ASSET_DIR / "qt_arrow_down.svg").replace("\\", "/")
 
 _CARD_STYLE = """
     QWidget#graphCard { background:#282c34; border:1px solid #3e4451; border-radius:12px; }
@@ -99,7 +103,7 @@ _CARD_STYLE = """
     QWidget#graphCard QSpinBox,
     QWidget#graphCard QDoubleSpinBox {
         background:#2c313a; border:1px solid #3e4451;
-        border-radius:8px; padding:5px 8px; font-size:14px; font-weight:700; color:#d7dae0;
+        border-radius:8px; padding:5px 8px; font-size:14px; font-weight:700; color:#f8fafc;
     }
     QWidget#graphCard QListView { background:#2c313a; border:1px solid #3e4451; }
     QWidget#graphCard QWidget#graphSection {
@@ -108,7 +112,7 @@ _CARD_STYLE = """
         border-radius:10px;
     }
     QWidget#graphCard QWidget#graphPreviewCard {
-        background:#ffffff;
+        background:#21252b;
         border:1px solid #3e4451;
         border-radius:10px;
     }
@@ -117,13 +121,45 @@ _CARD_STYLE = """
         font-size:14px; font-weight:700;
     }
     QWidget#graphCard QComboBox QAbstractItemView {
-        background:#2c313a; color:#d7dae0;
-        selection-background-color:#3e4451; selection-color:#61afef; outline:0;
+        background:#2c313a; color:#f8fafc;
+        selection-background-color:#61afef; selection-color:#ffffff; outline:0;
         border:1px solid #3e4451; border-radius:6px;
     }
     QWidget#graphCard QComboBox QAbstractItemView::item:hover {
-        background:#3e4451; color:#61afef;
+        background:#3e4451; color:#ffffff;
     }
+"""
+_CARD_STYLE += f"""
+    QWidget#graphCard QComboBox::down-arrow {{
+        image:url({_ARROW_DOWN});
+        width:10px; height:10px;
+    }}
+    QWidget#graphCard QSpinBox::up-button,
+    QWidget#graphCard QDoubleSpinBox::up-button {{
+        subcontrol-origin:border;
+        subcontrol-position:top right;
+        width:22px;
+        border-left:1px solid #3e4451;
+        background:#3e4451;
+    }}
+    QWidget#graphCard QSpinBox::down-button,
+    QWidget#graphCard QDoubleSpinBox::down-button {{
+        subcontrol-origin:border;
+        subcontrol-position:bottom right;
+        width:22px;
+        border-left:1px solid #3e4451;
+        background:#3e4451;
+    }}
+    QWidget#graphCard QSpinBox::up-arrow,
+    QWidget#graphCard QDoubleSpinBox::up-arrow {{
+        image:url({_ARROW_UP});
+        width:10px; height:10px;
+    }}
+    QWidget#graphCard QSpinBox::down-arrow,
+    QWidget#graphCard QDoubleSpinBox::down-arrow {{
+        image:url({_ARROW_DOWN});
+        width:10px; height:10px;
+    }}
 """
 _TEXT_SS  = "color:#d7dae0; font-weight:700; font-size:14px;"
 _LBL_SS   = "color:#d7dae0; font-weight:700; font-size:12px;"
@@ -131,10 +167,28 @@ _TITLE_SS = "color:#e5c07b; font-weight:700; font-size:12px;"
 _SECTION_TITLE_SS = _LBL_SS
 _MUTED_SS = "color:#5c6370; font-weight:700; font-size:14px;"
 _CB_SS = (
-    "QCheckBox { color:#d7dae0; font-weight:700; font-size:14px; }"
-    "QCheckBox::indicator { width:13px; height:13px; border:1.5px solid #61afef;"
-    " border-radius:3px; background:#2c313a; }"
-    "QCheckBox::indicator:checked { border:1.5px solid #61afef; background:#3e4451; }"
+    "QCheckBox { color:#f1f5f9; font-weight:700; font-size:14px; spacing:8px; }"
+    "QCheckBox::indicator { width:16px; height:16px; border:2px solid #61afef;"
+    " border-radius:4px; background:#21252b; }"
+    "QCheckBox::indicator:hover { border-color:#9cdcfe; background:#2c313a; }"
+    "QCheckBox::indicator:checked { border:2px solid #f8fafc; background:#61afef; }"
+)
+_RADIO_SS = (
+    "QRadioButton { color:#f1f5f9; font-weight:700; font-size:12px; spacing:8px; }"
+    "QRadioButton::indicator { width:15px; height:15px; border:2px solid #94a3b8;"
+    " border-radius:8px; background:#21252b; }"
+    "QRadioButton::indicator:hover { border-color:#9cdcfe; }"
+    "QRadioButton::indicator:checked { border:3px solid #f8fafc; background:#61afef; }"
+)
+_SPIN_SS = (
+    "QDoubleSpinBox, QSpinBox { background:#2c313a; border:1px solid #3e4451;"
+    " border-radius:8px; padding:5px 28px 5px 8px; font-size:14px; font-weight:700; color:#d7dae0; }"
+    "QDoubleSpinBox::up-button, QSpinBox::up-button { subcontrol-origin:border;"
+    " subcontrol-position:top right; width:22px; border-left:1px solid #3e4451; background:#3e4451; }"
+    "QDoubleSpinBox::down-button, QSpinBox::down-button { subcontrol-origin:border;"
+    " subcontrol-position:bottom right; width:22px; border-left:1px solid #3e4451; background:#3e4451; }"
+    f"QDoubleSpinBox::up-arrow, QSpinBox::up-arrow {{ image:url({_ARROW_UP}); width:10px; height:10px; }}"
+    f"QDoubleSpinBox::down-arrow, QSpinBox::down-arrow {{ image:url({_ARROW_DOWN}); width:10px; height:10px; }}"
 )
 
 
@@ -163,11 +217,12 @@ def _default_style() -> dict[str, Any]:
     }
 
 
-def _axis_opts(style: dict[str, Any], axis_title: str) -> dict[str, Any]:
+def _axis_opts(style: dict[str, Any], axis_title: str, axis_type: str = "linear") -> dict[str, Any]:
     """Build one Plotly axis configuration from the active style settings."""
     fs = int(style.get("font_size", 20))
     td = "inside" if style.get("ticks_inside", True) else "outside"
     return {
+        "type": "log" if axis_type == "log" else "linear",
         "title": {"text": axis_title, "font": {"size": fs + 2, "color": "#0f1b2b"}},
         "automargin": True,
         "tickfont": {"size": fs, "color": "#334155"},
@@ -195,20 +250,47 @@ def _apply_layout(
     if style:
         s.update(style)
     fs = int(s.get("font_size", 16))
+    right_margin = 180 if showlegend else 80
     fig.update_layout(
         title={"text": title or None, "font": {"size": fs + 4, "color": "#0f1b2b"}},
         showlegend=showlegend, plot_bgcolor="white", paper_bgcolor="white",
-        margin={"l": 60, "r": 160, "t": 35, "b": 90},
+        margin={"l": 70, "r": right_margin, "t": 45, "b": 90},
         font={"size": fs, "color": "#0f1b2b"},
         legend={"orientation": "v", "x": 1.02, "y": 1.0,
                 "xanchor": "left", "yanchor": "top", "font": {"size": fs + 4}},
         barmode=barmode, width=s.get("graph_width"), height=s.get("graph_height"),
     )
-    fig.update_xaxes(**_axis_opts(s, x_title))
-    fig.update_yaxes(**_axis_opts(s, y_title))
+    fig.update_xaxes(**_axis_opts(s, x_title, str(s.get("x_axis_type") or "linear")))
+    fig.update_yaxes(**_axis_opts(s, y_title, str(s.get("y_axis_type") or "linear")))
 
 
 # ── Array extraction (pure functions) ───────────────────────────────────────
+def _format_marker_label(x_value: float, y_value: float) -> str:
+    """Return the compact point label shown beside graph markers."""
+    return f"({x_value:.4g}, {y_value:.4g})"
+
+
+def _marker_label_positions(x_values: list[float], y_values: list[float]) -> list[str]:
+    """Place labels away from nearby plot edges to reduce clipping and overlap."""
+    if not x_values or not y_values:
+        return []
+    x_arr = np.asarray(x_values, dtype=float)
+    y_arr = np.asarray(y_values, dtype=float)
+    finite_x = x_arr[np.isfinite(x_arr)]
+    finite_y = y_arr[np.isfinite(y_arr)]
+    if len(finite_x) == 0 or len(finite_y) == 0:
+        return ["top right"] * len(x_values)
+    x_min, x_max = float(np.min(finite_x)), float(np.max(finite_x))
+    y_min, y_max = float(np.min(finite_y)), float(np.max(finite_y))
+    x_span = x_max - x_min
+    y_span = y_max - y_min
+    positions: list[str] = []
+    for x_val, y_val in zip(x_values, y_values):
+        horizontal = "left" if x_span and float(x_val) > x_min + 0.75 * x_span else "right"
+        vertical = "bottom" if y_span and float(y_val) > y_min + 0.75 * y_span else "top"
+        positions.append(f"{vertical} {horizontal}")
+    return positions
+
 
 def _to_1d(value: Any) -> np.ndarray | None:
     """Normalize a numeric list or array into a 1D float numpy array."""
@@ -228,13 +310,23 @@ def _to_2d(value: Any) -> np.ndarray | None:
     return arr.astype(float)
 
 
-def extract_notebook_array_variables(
+def _to_3d(value: Any) -> np.ndarray | None:
+    """Normalize a numeric list or array into a 3D float numpy array."""
+    arr = np.asarray(value) if isinstance(value, (list, tuple)) else \
+          value if isinstance(value, np.ndarray) else None
+    if arr is None or arr.ndim != 3 or not np.issubdtype(arr.dtype, np.number):
+        return None
+    return arr.astype(float)
+
+
+def extract_notebook_array_variables_with_3d(
     namespace: dict[str, Any],
-) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
-    """Extract numeric 1D and 2D arrays from a notebook execution namespace."""
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], dict[str, np.ndarray]]:
+    """Extract numeric 1D, 2D, and 3D arrays from a notebook execution namespace."""
     from types import ModuleType
     arrays_1d: dict[str, np.ndarray] = {}
     arrays_2d: dict[str, np.ndarray] = {}
+    arrays_3d: dict[str, np.ndarray] = {}
     for name, value in sorted(namespace.items()):
         if name.startswith("_") or callable(value) or isinstance(value, ModuleType):
             continue
@@ -245,7 +337,41 @@ def extract_notebook_array_variables(
         a2 = _to_2d(value)
         if a2 is not None:
             arrays_2d[name] = a2
+            continue
+        a3 = _to_3d(value)
+        if a3 is not None:
+            arrays_3d[name] = a3
+    return arrays_1d, arrays_2d, arrays_3d
+
+
+def extract_notebook_array_variables(
+    namespace: dict[str, Any],
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+    """Extract numeric 1D and 2D arrays from a notebook execution namespace."""
+    arrays_1d, arrays_2d, _arrays_3d = extract_notebook_array_variables_with_3d(namespace)
     return arrays_1d, arrays_2d
+
+
+def _default_series_y_name(arrays_1d: dict[str, np.ndarray], x_name: str = "") -> str | None:
+    """Choose a field-like 1D array for the default Y selection."""
+    names = sorted(arrays_1d)
+    if not names:
+        return None
+    axis_like = {"n", "n_history", "time", "time_history", "t", "t_history"}
+    candidates = [name for name in names if name != x_name]
+    field_candidates = [
+        name for name in candidates
+        if name not in axis_like and not name.endswith("_history")
+    ]
+    if field_candidates:
+        return field_candidates[0]
+    history_candidates = [
+        name for name in candidates
+        if name not in axis_like
+    ]
+    if history_candidates:
+        return history_candidates[0]
+    return candidates[0] if candidates else names[0]
 
 
 # ── Figure builders (pure functions) ────────────────────────────────────────
@@ -307,7 +433,32 @@ _EVO_COLORS = [
     "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
     "#c49c94", "#f7b6d2", "#9edae5", "#dbdb8d", "#c7c7c7",
 ]
-_EVO_MAX_ROWS = 20
+_EVO_MAX_ROWS = 5
+_EVO_ANIMATION_FRAME_MS = 45
+_QUICK_GRAPH_HEIGHT = 500
+_HEATMAP_COLORSCALE = [
+    [0.0, "#00328f"],
+    [0.25, "#00afb8"],
+    [0.5, "#fffbdf"],
+    [0.75, "#ffbc3c"],
+    [1.0, "#a51717"],
+]
+_HEATMAP_ZSMOOTH = "best"
+
+
+def _make_heatmap_range_spin(parent: QWidget) -> QDoubleSpinBox:
+    """Create a compact numeric color-range control."""
+    spin = QDoubleSpinBox(parent)
+    spin.setRange(-1.0e30, 1.0e30)
+    spin.setDecimals(6)
+    spin.setSingleStep(0.1)
+    spin.setMinimumWidth(110)
+    spin.setStyleSheet(_SPIN_SS)
+    try:
+        spin.setStepType(QDoubleSpinBox.StepType.AdaptiveDecimalStepType)
+    except Exception:
+        pass
+    return spin
 
 
 def build_notebook_evolution_figure(
@@ -337,7 +488,7 @@ def build_notebook_evolution_figure(
     v_axis = arrays_1d.get(value_var) if isinstance(value_var, str) and value_var else None
     v_axis = v_axis if v_axis is not None and len(v_axis) == cols else np.arange(cols, dtype=float)
 
-    # If more rows than limit, subsample evenly
+    # Static evolution plots stay sparse; animation uses the full history.
     if rows <= _EVO_MAX_ROWS:
         row_indices = list(range(rows))
     else:
@@ -367,13 +518,519 @@ def build_notebook_evolution_figure(
 
 # ── NamespaceConsumerMixin ────────────────────────────────────────────────────
 
+def build_notebook_evolution_animation_figure(
+    arrays_1d: dict[str, np.ndarray], arrays_2d: dict[str, np.ndarray],
+    matrix_var: str | None, time_var: str | None, value_var: str | None,
+    plot_type: str,
+    title: str, x_title: str, y_title: str,
+    style: dict[str, Any] | None = None,
+) -> go.Figure:
+    """Animate every row of a 2D history array as one time-evolving trace."""
+    print(
+        f"[debug][notebook-evolution-animation] inputs matrix={matrix_var!r} "
+        f"time={time_var!r} value={value_var!r} plot_type={plot_type!r}",
+        flush=True,
+    )
+    fig = go.Figure()
+    s = dict(_default_style())
+    if style:
+        s.update(style)
+    fs = int(s.get("font_size", 16))
+    lw = int(s.get("line_width", 2))
+    ms = int(s.get("marker_size", 7))
+    matrix = arrays_2d.get(matrix_var) if matrix_var else None
+    if matrix is None:
+        fig.add_annotation(text="Select a 2D array to animate.",
+                           x=0.5, y=0.5, xref="paper", yref="paper",
+                           showarrow=False, font={"size": fs, "color": "#94a3b8"})
+        print("[debug][notebook-evolution-animation] output=no_matrix", flush=True)
+        return fig
+    rows, cols = matrix.shape
+    if rows == 0 or cols == 0:
+        fig.add_annotation(text="Selected 2D array is empty.",
+                           x=0.5, y=0.5, xref="paper", yref="paper",
+                           showarrow=False, font={"size": fs, "color": "#94a3b8"})
+        print(f"[debug][notebook-evolution-animation] output=empty shape={matrix.shape}", flush=True)
+        return fig
+
+    t_axis = arrays_1d.get(time_var) if isinstance(time_var, str) and time_var else None
+    t_axis = t_axis if t_axis is not None and len(t_axis) == rows else np.arange(rows, dtype=float)
+    v_axis = arrays_1d.get(value_var) if isinstance(value_var, str) and value_var else None
+    v_axis = v_axis if v_axis is not None and len(v_axis) == cols else np.arange(cols, dtype=float)
+    frame_labels = [f"t={float(t_axis[i]):.4g}" if np.isscalar(t_axis[i]) else f"step {i}" for i in range(rows)]
+    color = _EVO_COLORS[0]
+    trace_kwargs = {"x": v_axis, "y": matrix[0], "name": frame_labels[0]}
+    if plot_type == "bar":
+        fig.add_trace(go.Bar(**trace_kwargs, marker_color=color))
+        frame_data = [go.Bar(x=v_axis, y=matrix[i], name=frame_labels[i], marker_color=color) for i in range(rows)]
+        redraw_frames = False
+    else:
+        mode = plot_type if plot_type != "histogram" else "lines"
+        fig.add_trace(go.Scatter(
+            **trace_kwargs,
+            mode=mode,
+            line={"color": color, "width": lw},
+            marker={"color": color, "size": ms},
+        ))
+        frame_data = [
+            go.Scatter(
+                x=v_axis, y=matrix[i], name=frame_labels[i], mode=mode,
+                line={"color": color, "width": lw},
+                marker={"color": color, "size": ms},
+            )
+            for i in range(rows)
+        ]
+        redraw_frames = False
+    fig.frames = [
+        go.Frame(data=[frame], traces=[0], name=str(i))
+        for i, frame in enumerate(frame_data)
+    ]
+    finite_values = np.asarray(matrix, dtype=float)
+    finite_values = finite_values[np.isfinite(finite_values)]
+    if finite_values.size:
+        y_min = float(np.min(finite_values))
+        y_max = float(np.max(finite_values))
+        pad = (y_max - y_min) * 0.08 if y_max > y_min else max(1.0, abs(y_max) * 0.08)
+        fig.update_yaxes(range=[y_min - pad, y_max + pad])
+    _apply_layout(fig,
+                  title=title or f"{matrix_var or '2D array'} evolution",
+                  x_title=x_title or (value_var or "column index"),
+                  y_title=y_title or (matrix_var or "value"),
+                  showlegend=False, style=s)
+    slider_frame_args = {
+        "mode": "immediate",
+        "frame": {"duration": 0, "redraw": redraw_frames},
+        "transition": {"duration": 0},
+    }
+    play_frame_args = {
+        "mode": "immediate",
+        "frame": {"duration": _EVO_ANIMATION_FRAME_MS, "redraw": redraw_frames},
+        "transition": {"duration": 0},
+        "fromcurrent": True,
+    }
+    fig.update_layout(
+        updatemenus=[{
+            "type": "buttons",
+            "direction": "left",
+            "x": 0.78,
+            "y": -0.18,
+            "xanchor": "left",
+            "yanchor": "top",
+            "showactive": False,
+            "buttons": [
+                {
+                    "label": "Play",
+                    "method": "animate",
+                    "args": [None, play_frame_args],
+                },
+                {
+                    "label": "Pause",
+                    "method": "animate",
+                    "args": [[None], slider_frame_args],
+                },
+            ],
+        }],
+        sliders=[{
+            "active": 0,
+            "currentvalue": {"prefix": "Time ", "font": {"size": fs}},
+            "pad": {"t": 58, "b": 8},
+            "steps": [
+                {
+                    "label": frame_labels[i],
+                    "method": "animate",
+                    "args": [[str(i)], slider_frame_args],
+                }
+                for i in range(rows)
+            ],
+        }],
+        margin={"l": 70, "r": 80, "t": 45, "b": 170},
+    )
+    print(
+        f"[debug][notebook-evolution-animation] output frames={len(fig.frames)} "
+        f"shape={matrix.shape} x_len={len(v_axis)}",
+        flush=True,
+    )
+    return fig
+
+
+def _matching_axis(
+    arrays_1d: dict[str, np.ndarray],
+    axis_var: str | None,
+    expected_len: int,
+    fallback_label: str,
+) -> tuple[np.ndarray, str]:
+    """Return a matching 1D axis, or a positional fallback."""
+    axis = arrays_1d.get(axis_var) if isinstance(axis_var, str) and axis_var else None
+    if axis is not None and len(axis) == expected_len:
+        return axis, axis_var or fallback_label
+    return np.arange(expected_len, dtype=float), fallback_label
+
+
+def _finite_min_max(value: np.ndarray | None) -> tuple[float, float] | None:
+    """Return finite min/max for a numeric field or history."""
+    if value is None:
+        return None
+    arr = np.asarray(value, dtype=float)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return None
+    return float(np.min(finite)), float(np.max(finite))
+
+
+def build_notebook_heatmap_figure(
+    arrays_1d: dict[str, np.ndarray],
+    arrays_2d: dict[str, np.ndarray],
+    arrays_3d: dict[str, np.ndarray],
+    field_var: str | None,
+    time_var: str | None,
+    x_var: str | None,
+    y_var: str | None,
+    animate: bool,
+    title: str,
+    x_title: str,
+    y_title: str,
+    style: dict[str, Any] | None = None,
+    scale_mode: str = "updated",
+    color_min: float | None = None,
+    color_max: float | None = None,
+) -> go.Figure:
+    """Build a static 2D heatmap or animated (t, y, x) heatmap history."""
+    fig = go.Figure()
+    s = dict(_default_style())
+    if style:
+        s.update(style)
+    fs = int(s.get("font_size", 16))
+    field_2d = arrays_2d.get(field_var) if field_var else None
+    field_3d = arrays_3d.get(field_var) if field_var else None
+    print(
+        f"[debug][notebook-heatmap] inputs field={field_var!r} "
+        f"has_2d={field_2d is not None} has_3d={field_3d is not None} animate={animate}",
+        flush=True,
+    )
+    if field_2d is None and field_3d is None:
+        fig.add_annotation(text="Select a 2D field or 3D history to plot.",
+                           x=0.5, y=0.5, xref="paper", yref="paper",
+                           showarrow=False, font={"size": fs, "color": "#94a3b8"})
+        return fig
+
+    if field_3d is not None:
+        if field_3d.size == 0 or field_3d.shape[0] == 0:
+            fig.add_annotation(text="Selected 3D field history is empty.",
+                               x=0.5, y=0.5, xref="paper", yref="paper",
+                               showarrow=False, font={"size": fs, "color": "#94a3b8"})
+            return fig
+        frames_data = field_3d
+        z0 = frames_data[0]
+        t_axis, _ = _matching_axis(arrays_1d, time_var, frames_data.shape[0], "time index")
+    else:
+        frames_data = None
+        z0 = field_2d
+        t_axis = np.asarray([], dtype=float)
+
+    if z0 is None or z0.ndim != 2:
+        fig.add_annotation(text="Selected field must be shaped (y, x) or (t, y, x).",
+                           x=0.5, y=0.5, xref="paper", yref="paper",
+                           showarrow=False, font={"size": fs, "color": "#94a3b8"})
+        return fig
+
+    rows, cols = z0.shape
+    x_axis, x_name = _matching_axis(arrays_1d, x_var, cols, "column index")
+    y_axis, y_name = _matching_axis(arrays_1d, y_var, rows, "row index")
+    fixed_scale = scale_mode == "fixed"
+    z_range_data = frames_data if frames_data is not None else z0
+    data_range = _finite_min_max(z_range_data)
+    z_min = z_max = None
+    if fixed_scale:
+        if color_min is not None and color_max is not None and np.isfinite(color_min) and np.isfinite(color_max):
+            z_min = float(color_min)
+            z_max = float(color_max)
+            if z_min > z_max:
+                z_min, z_max = z_max, z_min
+        elif data_range is not None:
+            z_min, z_max = data_range
+        if z_min is not None and z_max is not None and z_min == z_max:
+            pad = max(1.0, abs(z_min) * 0.01)
+            z_min -= pad
+            z_max += pad
+    if fixed_scale and z_min is None:
+        fixed_scale = False
+    heatmap_scale: dict[str, Any] = {"zauto": not fixed_scale}
+    if fixed_scale and z_min is not None and z_max is not None:
+        heatmap_scale.update({"zmin": z_min, "zmax": z_max})
+    heatmap = go.Heatmap(
+        x=x_axis,
+        y=y_axis,
+        z=z0,
+        colorscale=_HEATMAP_COLORSCALE,
+        zsmooth=_HEATMAP_ZSMOOTH,
+        colorbar={"title": field_var or "value"},
+        **heatmap_scale,
+    )
+    fig.add_trace(heatmap)
+
+    show_animation = bool(animate and frames_data is not None and frames_data.shape[0] > 1)
+    if show_animation:
+        frame_duration = _EVO_ANIMATION_FRAME_MS
+        redraw_frames = True
+        frames: list[go.Frame] = []
+        steps: list[dict[str, Any]] = []
+        for i, frame_z in enumerate(frames_data):
+            frame_name = str(i)
+            t_val = t_axis[i] if len(t_axis) > i else i
+            label = f"t={float(t_val):.4g}"
+            frames.append(go.Frame(
+                data=[go.Heatmap(x=x_axis, y=y_axis, z=frame_z, colorscale=_HEATMAP_COLORSCALE,
+                                 zsmooth=_HEATMAP_ZSMOOTH, **heatmap_scale,
+                                 colorbar={"title": field_var or "value"})],
+                name=frame_name,
+                layout=go.Layout(title={"text": title or f"{field_var or 'field'}  {label}"}),
+            ))
+            steps.append({
+                "method": "animate",
+                "label": label,
+                "args": [[frame_name], {
+                    "mode": "immediate",
+                    "frame": {"duration": 0, "redraw": redraw_frames},
+                    "transition": {"duration": 0},
+                }],
+            })
+        fig.frames = frames
+        button_args = [None, {
+            "mode": "immediate",
+            "fromcurrent": True,
+            "frame": {"duration": frame_duration, "redraw": redraw_frames},
+            "transition": {"duration": 0},
+        }]
+        fig.update_layout(
+            updatemenus=[{
+                "type": "buttons",
+                "direction": "left",
+                "x": 0.78,
+                "y": -0.18,
+                "xanchor": "left",
+                "yanchor": "top",
+                "showactive": False,
+                "buttons": [
+                    {"label": "Play", "method": "animate", "args": button_args},
+                    {"label": "Pause", "method": "animate",
+                     "args": [[None], {"mode": "immediate", "frame": {"duration": 0, "redraw": redraw_frames},
+                                       "transition": {"duration": 0}}]},
+                ],
+            }],
+            sliders=[{
+                "active": 0,
+                "pad": {"t": 58, "b": 8},
+                "currentvalue": {"prefix": "Time ", "font": {"size": fs}},
+                "steps": steps,
+            }],
+        )
+
+    _apply_layout(
+        fig,
+        title=title or (field_var or "Heatmap"),
+        x_title=x_title or x_name,
+        y_title=y_title or y_name,
+        showlegend=False,
+        style=s,
+    )
+    fig.update_xaxes(constrain="domain")
+    fig.update_yaxes(scaleanchor="x", scaleratio=1, constrain="domain")
+    if show_animation:
+        fig.update_layout(margin={"l": 70, "r": 100, "t": 45, "b": 170})
+    print(
+        f"[debug][notebook-heatmap] output shape={z0.shape} frames={len(fig.frames)} "
+        f"x_len={len(x_axis)} y_len={len(y_axis)} scale_mode={scale_mode!r}",
+        flush=True,
+    )
+    return fig
+
+
+def build_notebook_contour_figure(
+    arrays_1d: dict[str, np.ndarray],
+    arrays_2d: dict[str, np.ndarray],
+    arrays_3d: dict[str, np.ndarray],
+    field_var: str | None,
+    time_var: str | None,
+    x_var: str | None,
+    y_var: str | None,
+    animate: bool,
+    title: str,
+    x_title: str,
+    y_title: str,
+    style: dict[str, Any] | None = None,
+    scale_mode: str = "updated",
+    color_min: float | None = None,
+    color_max: float | None = None,
+    filled: bool = False,
+    banded: bool = False,
+) -> go.Figure:
+    """Build line or filled contours from (y, x) or animated (t, y, x) data."""
+    fig = go.Figure()
+    s = dict(_default_style())
+    if style:
+        s.update(style)
+    fs = int(s.get("font_size", 16))
+    field_2d = arrays_2d.get(field_var) if field_var else None
+    field_3d = arrays_3d.get(field_var) if field_var else None
+    mode_name = "banded-contour" if banded else "filled-contour" if filled else "contour"
+    print(
+        f"[debug][notebook-{mode_name}] inputs field={field_var!r} "
+        f"has_2d={field_2d is not None} has_3d={field_3d is not None} animate={animate}",
+        flush=True,
+    )
+    if field_2d is None and field_3d is None:
+        fig.add_annotation(text="Select a 2D field or 3D history to plot as contours.",
+                           x=0.5, y=0.5, xref="paper", yref="paper",
+                           showarrow=False, font={"size": fs, "color": "#94a3b8"})
+        return fig
+
+    if field_3d is not None:
+        if field_3d.size == 0 or field_3d.shape[0] == 0:
+            fig.add_annotation(text="Selected 3D field history is empty.",
+                               x=0.5, y=0.5, xref="paper", yref="paper",
+                               showarrow=False, font={"size": fs, "color": "#94a3b8"})
+            return fig
+        frames_data = field_3d
+        z0 = frames_data[0]
+        t_axis, _ = _matching_axis(arrays_1d, time_var, frames_data.shape[0], "time index")
+    else:
+        frames_data = None
+        z0 = field_2d
+        t_axis = np.asarray([], dtype=float)
+
+    if z0 is None or z0.ndim != 2:
+        fig.add_annotation(text="Selected field must be shaped (y, x) or (t, y, x).",
+                           x=0.5, y=0.5, xref="paper", yref="paper",
+                           showarrow=False, font={"size": fs, "color": "#94a3b8"})
+        return fig
+
+    rows, cols = z0.shape
+    x_axis, x_name = _matching_axis(arrays_1d, x_var, cols, "column index")
+    y_axis, y_name = _matching_axis(arrays_1d, y_var, rows, "row index")
+    fixed_scale = scale_mode == "fixed"
+    data_range = _finite_min_max(frames_data if frames_data is not None else z0)
+    z_min = z_max = None
+    if fixed_scale:
+        if color_min is not None and color_max is not None and np.isfinite(color_min) and np.isfinite(color_max):
+            z_min = float(color_min)
+            z_max = float(color_max)
+            if z_min > z_max:
+                z_min, z_max = z_max, z_min
+        elif data_range is not None:
+            z_min, z_max = data_range
+        if z_min is not None and z_max is not None and z_min == z_max:
+            pad = max(1.0, abs(z_min) * 0.01)
+            z_min -= pad
+            z_max += pad
+    if fixed_scale and z_min is None:
+        fixed_scale = False
+    contour_scale: dict[str, Any] = {"zauto": not fixed_scale}
+    if fixed_scale and z_min is not None and z_max is not None:
+        contour_scale.update({"zmin": z_min, "zmax": z_max})
+    contour_style = {
+        "coloring": "fill" if banded else "heatmap" if filled else "lines",
+        "showlines": bool(banded or not filled),
+        "showlabels": not filled,
+    }
+    line_style = {"width": 1.2, "color": "#1f2937"} if banded else {"width": 1.5, "color": "#1f2937"} if filled else {"width": 2.0}
+
+    fig.add_trace(go.Contour(
+        x=x_axis,
+        y=y_axis,
+        z=z0,
+        colorscale=_HEATMAP_COLORSCALE,
+        contours=contour_style,
+        line=line_style,
+        colorbar={"title": field_var or "value"},
+        **contour_scale,
+    ))
+
+    show_animation = bool(animate and frames_data is not None and frames_data.shape[0] > 1)
+    if show_animation:
+        frames: list[go.Frame] = []
+        steps: list[dict[str, Any]] = []
+        for i, frame_z in enumerate(frames_data):
+            frame_name = str(i)
+            t_val = t_axis[i] if len(t_axis) > i else i
+            label = f"t={float(t_val):.4g}"
+            frames.append(go.Frame(
+                data=[go.Contour(
+                    x=x_axis, y=y_axis, z=frame_z,
+                    colorscale=_HEATMAP_COLORSCALE,
+                    contours=contour_style,
+                    line=line_style,
+                    colorbar={"title": field_var or "value"},
+                    **contour_scale,
+                )],
+                name=frame_name,
+                layout=go.Layout(title={"text": title or f"{field_var or 'field'}  {label}"}),
+            ))
+            steps.append({
+                "method": "animate",
+                "label": label,
+                "args": [[frame_name], {
+                    "mode": "immediate",
+                    "frame": {"duration": 0, "redraw": True},
+                    "transition": {"duration": 0},
+                }],
+            })
+        fig.frames = frames
+        fig.update_layout(
+            updatemenus=[{
+                "type": "buttons",
+                "direction": "left",
+                "x": 0.78,
+                "y": -0.18,
+                "xanchor": "left",
+                "yanchor": "top",
+                "showactive": False,
+                "buttons": [
+                    {"label": "Play", "method": "animate",
+                     "args": [None, {"mode": "immediate", "fromcurrent": True,
+                                      "frame": {"duration": _EVO_ANIMATION_FRAME_MS, "redraw": True},
+                                      "transition": {"duration": 0}}]},
+                    {"label": "Pause", "method": "animate",
+                     "args": [[None], {"mode": "immediate",
+                                       "frame": {"duration": 0, "redraw": True},
+                                       "transition": {"duration": 0}}]},
+                ],
+            }],
+            sliders=[{
+                "active": 0,
+                "pad": {"t": 58, "b": 8},
+                "currentvalue": {"prefix": "Time ", "font": {"size": fs}},
+                "steps": steps,
+            }],
+        )
+
+    _apply_layout(
+        fig,
+        title=title or (field_var or ("Banded contourf" if banded else "Filled contour" if filled else "Contour")),
+        x_title=x_title or x_name,
+        y_title=y_title or y_name,
+        showlegend=False,
+        style=s,
+    )
+    fig.update_xaxes(constrain="domain")
+    fig.update_yaxes(scaleanchor="x", scaleratio=1, constrain="domain")
+    if show_animation:
+        fig.update_layout(margin={"l": 70, "r": 100, "t": 45, "b": 170})
+    print(
+        f"[debug][notebook-{mode_name}] output shape={z0.shape} frames={len(fig.frames)} "
+        f"x_len={len(x_axis)} y_len={len(y_axis)} scale_mode={scale_mode!r}",
+        flush=True,
+    )
+    return fig
+
+
 class NamespaceConsumerMixin:
     """Shared helpers for namespace management and combo selection preservation."""
 
     def _init_namespace_state(self) -> None:
-        """Initialize cached 1D and 2D array dictionaries for a graph consumer."""
+        """Initialize cached numeric array dictionaries for a graph consumer."""
         self._nb_arrays_1d: dict[str, np.ndarray] = {}
         self._nb_arrays_2d: dict[str, np.ndarray] = {}
+        self._nb_arrays_3d: dict[str, np.ndarray] = {}
 
     @staticmethod
     def _restore_selection(combo: AutoCloseComboBox | CheckableComboBox, previous: Any) -> None:
@@ -453,11 +1110,18 @@ class DataSourceWidget(QWidget):
 
         self._btn_group.buttonToggled.connect(self._on_toggle)
 
-        # Per-axis scale rows — always visible
+        # Per-axis scale controls — always visible
+        scale_row_widget = QWidget(self)
+        scale_row_widget.setObjectName("dataScaleRow")
+        scale_row = QHBoxLayout(scale_row_widget)
+        scale_row.setContentsMargins(0, 0, 0, 0)
+        scale_row.setSpacing(14)
         self._x_scale_mul, self._x_scale_div, self._x_scale_spin, self._x_scale_grp = \
-            self._make_scale_row("X scale:", root)
+            self._make_scale_row("X scale:", scale_row)
         self._y_scale_mul, self._y_scale_div, self._y_scale_spin, self._y_scale_grp = \
-            self._make_scale_row("Y scale:", root)
+            self._make_scale_row("Y scale:", scale_row)
+        scale_row.addStretch(1)
+        root.addWidget(scale_row_widget)
 
         self._x_scale_mul.toggled.connect(lambda _: self.changed.emit())
         self._x_scale_spin.valueChanged.connect(lambda _: self.changed.emit())
@@ -491,13 +1155,17 @@ class DataSourceWidget(QWidget):
     # ── private ──────────────────────────────────────────────────────
 
     def _make_scale_row(
-        self, label: str, parent_layout: QVBoxLayout
+        self, label: str, parent_layout: QHBoxLayout
     ) -> tuple[QRadioButton, QRadioButton, QDoubleSpinBox, QButtonGroup]:
         row = QHBoxLayout()
         row.setSpacing(6)
-        row.addWidget(QLabel(label, self))
-        mul_btn = QRadioButton("×", self)
-        div_btn = QRadioButton("÷", self)
+        label_widget = QLabel(label, self)
+        label_widget.setStyleSheet(_LBL_SS)
+        row.addWidget(label_widget)
+        mul_btn = QRadioButton("Multiply", self)
+        div_btn = QRadioButton("Divide", self)
+        mul_btn.setStyleSheet(_RADIO_SS)
+        div_btn.setStyleSheet(_RADIO_SS)
         mul_btn.setChecked(True)
         grp = QButtonGroup(self)
         grp.addButton(mul_btn)
@@ -507,11 +1175,11 @@ class DataSourceWidget(QWidget):
         spin.setDecimals(6)
         spin.setValue(1.0)
         spin.setSingleStep(1.0)
-        spin.setFixedWidth(110)
+        spin.setFixedWidth(176)
+        spin.setStyleSheet(_SPIN_SS)
         row.addWidget(mul_btn)
         row.addWidget(div_btn)
         row.addWidget(spin)
-        row.addStretch(1)
         parent_layout.addLayout(row)
         return mul_btn, div_btn, spin, grp
 
@@ -579,6 +1247,7 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         super().__init__(parent)
         self._init_namespace_state()
         self._arrays_2d: dict[str, np.ndarray] = {}
+        self._arrays_3d: dict[str, np.ndarray] = {}
         self.setStyleSheet("QLabel { " + _LBL_SS + " }")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -591,6 +1260,10 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         self.mode_combo = AutoCloseComboBox(self)
         self.mode_combo.addItem("Series (1D)", "series")
         self.mode_combo.addItem("Evolution (2D)", "evolution")
+        self.mode_combo.addItem("Heatmap (2D/3D)", "heatmap")
+        self.mode_combo.addItem("Contour (2D/3D)", "contour")
+        self.mode_combo.addItem("Filled contour (2D/3D)", "contourf")
+        self.mode_combo.addItem("Banded contourf (2D/3D)", "contourfb")
         mode_row.addWidget(mode_lbl)
         mode_row.addWidget(self.mode_combo, 1)
         root.addLayout(mode_row)
@@ -633,10 +1306,25 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         self.evo_time_combo.addItem("Row index", "")
         self.evo_value_combo  = AutoCloseComboBox(self)
         self.evo_value_combo.addItem("Column index", "")
+        self.evo_y_combo = AutoCloseComboBox(self)
+        self.evo_y_combo.addItem("Row index", "")
+        self.evo_animate_check = QCheckBox("Animate full evolution", self)
+        self.evo_animate_check.setStyleSheet(_CB_SS)
+        self.heatmap_scale_combo = AutoCloseComboBox(self)
+        self.heatmap_scale_combo.addItem("Updated per frame", "updated")
+        self.heatmap_scale_combo.addItem("Fixed full range", "fixed")
+        self.heatmap_min_spin = _make_heatmap_range_spin(self)
+        self.heatmap_max_spin = _make_heatmap_range_spin(self)
+        self._updating_heatmap_range = False
         for row_lbl, widget in (
             ("Evolution array", self.evo_matrix_combo),
             ("Time axis", self.evo_time_combo),
             ("Value axis", self.evo_value_combo),
+            ("Y axis", self.evo_y_combo),
+            ("Playback", self.evo_animate_check),
+            ("Heatmap scale", self.heatmap_scale_combo),
+            ("Color min", self.heatmap_min_spin),
+            ("Color max", self.heatmap_max_spin),
         ):
             evo_form.addRow(row_lbl, widget)
         self._evo_widget.hide()
@@ -650,6 +1338,11 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         self.evo_matrix_combo.currentIndexChanged.connect(self._on_matrix_changed)
         self.evo_time_combo.currentIndexChanged.connect(self.changed)
         self.evo_value_combo.currentIndexChanged.connect(self.changed)
+        self.evo_y_combo.currentIndexChanged.connect(self.changed)
+        self.evo_animate_check.toggled.connect(self.changed)
+        self.heatmap_scale_combo.currentIndexChanged.connect(self.changed)
+        self.heatmap_min_spin.valueChanged.connect(self._on_heatmap_range_edited)
+        self.heatmap_max_spin.valueChanged.connect(self._on_heatmap_range_edited)
 
     # ── public ───────────────────────────────────────────────────────
 
@@ -657,17 +1350,20 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         self,
         arrays_1d: dict[str, np.ndarray],
         arrays_2d: dict[str, np.ndarray],
+        arrays_3d: dict[str, np.ndarray] | None = None,
     ) -> None:
         """Rebuild selector combos from the current 1D and 2D array sets."""
         self._arrays_2d = dict(arrays_2d)
+        self._arrays_3d = dict(arrays_3d or {})
         prev_x      = self.x_combo.currentData()
         prev_y      = set(self.selected_y_vars())
         prev_matrix = self.evo_matrix_combo.currentData()
         prev_time   = self.evo_time_combo.currentData()
         prev_value  = self.evo_value_combo.currentData()
+        prev_heat_y = self.evo_y_combo.currentData()
 
         for combo in (self.x_combo, self.y_combo, self.evo_matrix_combo,
-                      self.evo_time_combo, self.evo_value_combo):
+                      self.evo_time_combo, self.evo_value_combo, self.evo_y_combo):
             combo.blockSignals(True)
 
         self.x_combo.clear()
@@ -679,35 +1375,47 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
         self.evo_time_combo.addItem("Row index", "")
         self.evo_value_combo.clear()
         self.evo_value_combo.addItem("Column index", "")
+        self.evo_y_combo.clear()
+        self.evo_y_combo.addItem("Row index", "")
 
         for name in sorted(arrays_1d):
             self.x_combo.addItem(name, name)
             self.evo_time_combo.addItem(name, name)
             self.evo_value_combo.addItem(name, name)
+            self.evo_y_combo.addItem(name, name)
             self.y_combo.add_check_item(name, name, checked=name in prev_y)
         for name in sorted(arrays_2d):
             self.evo_matrix_combo.addItem(name, name)
+        for name in sorted(self._arrays_3d):
+            self.evo_matrix_combo.addItem(f"{name} (t,y,x)", name)
 
         for combo, prev in (
             (self.x_combo, prev_x), (self.evo_matrix_combo, prev_matrix),
             (self.evo_time_combo, prev_time), (self.evo_value_combo, prev_value),
+            (self.evo_y_combo, prev_heat_y),
         ):
             self._restore_selection(combo, prev)
 
-        if not prev_y and arrays_1d:
-            names = sorted(arrays_1d)
-            x_name = self.x_combo.currentData() or ""
-            default = names[1] if len(names) > 1 and x_name == names[0] else names[0]
+        if not self.evo_matrix_combo.currentData() and (arrays_2d or self._arrays_3d):
+            source = arrays_2d or self._arrays_3d
+            first_matrix = next(iter(sorted(source)))
+            idx = self.evo_matrix_combo.findData(first_matrix)
+            if idx >= 0:
+                self.evo_matrix_combo.setCurrentIndex(idx)
+
+        valid_y = prev_y & set(arrays_1d)
+        if not valid_y and arrays_1d:
+            default = _default_series_y_name(arrays_1d, self.x_combo.currentData() or "")
             self.y_combo.set_checked_values([default])
 
         for combo in (self.x_combo, self.y_combo, self.evo_matrix_combo,
-                      self.evo_time_combo, self.evo_value_combo):
+                      self.evo_time_combo, self.evo_value_combo, self.evo_y_combo):
             combo.blockSignals(False)
 
         self._on_matrix_changed()
 
     def mode(self) -> str:
-        """Return the current graph mode: `series` or `evolution`."""
+        """Return the current graph mode."""
         return self.mode_combo.currentData() or "series"
 
     def selected_x(self) -> str | None:
@@ -731,6 +1439,27 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
             self.evo_value_combo.currentData() or None,
         )
 
+    def animate_evolution(self) -> bool:
+        """Return whether evolution plots should use Plotly frame playback."""
+        return self.evo_animate_check.isChecked()
+
+    def heatmap_params(self) -> tuple[str | None, str | None, str | None, str | None]:
+        """Return the selected field, time, x, and y variables for heatmap mode."""
+        return (
+            self.evo_matrix_combo.currentData() or None,
+            self.evo_time_combo.currentData() or None,
+            self.evo_value_combo.currentData() or None,
+            self.evo_y_combo.currentData() or None,
+        )
+
+    def heatmap_scale_mode(self) -> str:
+        """Return whether heatmap colors update per frame or stay fixed."""
+        return self.heatmap_scale_combo.currentData() or "updated"
+
+    def heatmap_color_range(self) -> tuple[float, float]:
+        """Return the manually editable heatmap color range."""
+        return self.heatmap_min_spin.value(), self.heatmap_max_spin.value()
+
     # ── private ──────────────────────────────────────────────────────
 
     def _sync_mode(self) -> None:
@@ -742,7 +1471,36 @@ class AxisSelectorWidget(QWidget, NamespaceConsumerMixin):
 
     def _on_matrix_changed(self) -> None:
         print(f"[debug][axis-selector] matrix_changed name={self.evo_matrix_combo.currentData()!r}", flush=True)
+        self._reset_heatmap_range_from_selection()
         self.changed.emit()
+
+    def _reset_heatmap_range_from_selection(self) -> None:
+        """Fill min/max controls from the selected full field/history."""
+        field_name = self.evo_matrix_combo.currentData()
+        field = self._arrays_3d.get(field_name) if field_name in self._arrays_3d else self._arrays_2d.get(field_name)
+        value_range = _finite_min_max(field)
+        if value_range is None:
+            return
+        self._updating_heatmap_range = True
+        try:
+            self.heatmap_min_spin.blockSignals(True)
+            self.heatmap_max_spin.blockSignals(True)
+            self.heatmap_min_spin.setValue(value_range[0])
+            self.heatmap_max_spin.setValue(value_range[1])
+            self.heatmap_min_spin.blockSignals(False)
+            self.heatmap_max_spin.blockSignals(False)
+        finally:
+            self._updating_heatmap_range = False
+
+    def _on_heatmap_range_edited(self, _value: float) -> None:
+        """Switch to fixed scale when the user edits the color range."""
+        if self._updating_heatmap_range:
+            return
+        fixed_idx = self.heatmap_scale_combo.findData("fixed")
+        if fixed_idx >= 0 and self.heatmap_scale_combo.currentData() != "fixed":
+            self.heatmap_scale_combo.setCurrentIndex(fixed_idx)
+        else:
+            self.changed.emit()
 
 
 # ── SeriesStyleWidget ─────────────────────────────────────────────────────────
@@ -864,46 +1622,53 @@ class PlotStyleWidget(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
 
-        # size + title row
-        size_row = QHBoxLayout()
-        size_lbl = QLabel("Graph size", self)
-        size_lbl.setStyleSheet(_LBL_SS)
+        controls_row_widget = QWidget(self)
+        controls_row_widget.setObjectName("appearanceControlRow")
+        controls_row = QHBoxLayout(controls_row_widget)
+        controls_row.setContentsMargins(0, 0, 0, 0)
+        controls_row.setSpacing(8)
+
         self.size_combo = AutoCloseComboBox(self)
         for lbl, val in GRAPH_SIZE_OPTIONS:
             self.size_combo.addItem(lbl, val)
-        size_row.addWidget(size_lbl)
-        size_row.addWidget(self.size_combo, 1)
-        root.addLayout(size_row)
 
-        # numeric controls
-        num_row = QHBoxLayout()
-        num_row.setSpacing(8)
         self.font_size_combo   = AutoCloseComboBox(self)
         self.line_width_combo  = AutoCloseComboBox(self)
         self.marker_size_combo = AutoCloseComboBox(self)
+        self.x_axis_scale_combo = AutoCloseComboBox(self)
+        self.y_axis_scale_combo = AutoCloseComboBox(self)
+
         for val in FONT_SIZE_OPTIONS:
             self.font_size_combo.addItem(str(val), val)
         for val in LINE_WIDTH_OPTIONS:
             self.line_width_combo.addItem(str(val), val)
         for val in MARKER_SIZE_OPTIONS:
             self.marker_size_combo.addItem(str(val), val)
+        for combo in (self.x_axis_scale_combo, self.y_axis_scale_combo):
+            combo.addItem("Linear", "linear")
+            combo.addItem("Log", "log")
+
         self.font_size_combo.setCurrentIndex(self.font_size_combo.findData(16))
         self.line_width_combo.setCurrentIndex(self.line_width_combo.findData(2))
         mk_idx = self.marker_size_combo.findData(8)
         self.marker_size_combo.setCurrentIndex(max(mk_idx, 0))
+
         for lbl_text, widget in (
+            ("Graph size", self.size_combo),
             ("Font", self.font_size_combo),
             ("Line", self.line_width_combo),
             ("Marker", self.marker_size_combo),
+            ("X axis", self.x_axis_scale_combo),
+            ("Y axis", self.y_axis_scale_combo),
         ):
-            blk = QWidget(self)
+            blk = QWidget(controls_row_widget)
             bl = QVBoxLayout(blk)
             bl.setContentsMargins(0, 0, 0, 0)
             bl.setSpacing(3)
             bl.addWidget(QLabel(lbl_text, blk))
             bl.addWidget(widget)
-            num_row.addWidget(blk, 1)
-        root.addLayout(num_row)
+            controls_row.addWidget(blk, 2 if lbl_text == "Graph size" else 1)
+        root.addWidget(controls_row_widget)
 
         # checkbox row
         cb_row = QHBoxLayout()
@@ -919,8 +1684,11 @@ class PlotStyleWidget(QWidget):
         cb_row.addStretch(1)
         root.addLayout(cb_row)
 
-        for widget in (self.size_combo, self.font_size_combo,
-                        self.line_width_combo, self.marker_size_combo):
+        for widget in (
+            self.size_combo, self.font_size_combo,
+            self.line_width_combo, self.marker_size_combo,
+            self.x_axis_scale_combo, self.y_axis_scale_combo,
+        ):
             widget.currentIndexChanged.connect(self.changed)
         for cb in (self.grid_check, self.box_check, self.ticks_check, self.minor_check):
             cb.toggled.connect(self.changed)
@@ -945,6 +1713,8 @@ class PlotStyleWidget(QWidget):
             "show_minor_ticks": self.minor_check.isChecked(),
             "graph_width":     w,
             "graph_height":    h,
+            "x_axis_type":     str(self.x_axis_scale_combo.currentData() or "linear"),
+            "y_axis_type":     str(self.y_axis_scale_combo.currentData() or "linear"),
         }
         print(f"[debug][plot-style-widget] style_options options={options!r}", flush=True)
         return options
@@ -1021,8 +1791,14 @@ class AnalysisWidget(QWidget):
         root.setContentsMargins(8, 6, 8, 6)
         root.setSpacing(6)
         root.addLayout(self._build_smooth_row())
+        root.addLayout(self._build_reference_rows())
         root.addLayout(self._build_deriv_row())
+        root.addLayout(self._build_preset_row())
         root.addLayout(self._build_fit_rows())
+        self._summary_label = QLabel("", self)
+        self._summary_label.setWordWrap(True)
+        self._summary_label.setStyleSheet("color:#94a3b8; font-size:12px; font-weight:700;")
+        root.addWidget(self._summary_label)
 
     # ── public ───────────────────────────────────────────────────────
 
@@ -1035,6 +1811,7 @@ class AnalysisWidget(QWidget):
     ) -> str:
         """Add overlay traces to *fig* in-place. Returns status string."""
         parts: list[str] = []
+        parts.extend(self._reference_lines(fig))
         for y_name in y_vars:
             y_data = arrays_1d.get(y_name)
             if y_data is None or len(y_data) == 0:
@@ -1042,10 +1819,17 @@ class AnalysisWidget(QWidget):
             x_raw = arrays_1d.get(x_var) if x_var else None
             x = (x_raw if x_raw is not None and len(x_raw) == len(y_data)
                  else np.arange(len(y_data), dtype=float))
+            parts.extend(self._reference_intersections(fig, x, y_data, y_name))
             parts.extend(self._smooth(fig, x, y_data, y_name))
-            parts.extend(self._derivative(fig, x, y_data, y_name))
+            parts.extend(self._derivatives(fig, x, y_data, y_name))
             parts.extend(self._fit(fig, x, y_data, y_name))
-        return "  |  ".join(parts)
+        summary = "  |  ".join(parts)
+        self._summary_label.setText(summary)
+        return summary
+
+    def summary_text(self) -> str:
+        """Return the latest post-processing summary text."""
+        return self._summary_label.text()
 
     # ── private builders ─────────────────────────────────────────────
 
@@ -1059,9 +1843,11 @@ class AnalysisWidget(QWidget):
         self.smooth_window.setRange(3, 999)
         self.smooth_window.setSingleStep(2)
         self.smooth_window.setValue(5)
+        self.smooth_window.setStyleSheet(_SPIN_SS)
         self.smooth_poly = QSpinBox(self)
         self.smooth_poly.setRange(1, 5)
         self.smooth_poly.setValue(2)
+        self.smooth_poly.setStyleSheet(_SPIN_SS)
         row.addWidget(self.smooth_check)
         row.addStretch(1)
         row.addWidget(QLabel("Window", self))
@@ -1074,14 +1860,88 @@ class AnalysisWidget(QWidget):
         return row
 
     def _build_deriv_row(self) -> QHBoxLayout:
-        """Create the derivative toggle row."""
+        """Create derivative overlay and zero-marker controls."""
         row = QHBoxLayout()
-        self.deriv_check = QCheckBox("Derivative  dy/dx", self)
-        self.deriv_check.setStyleSheet(_CB_SS)
-        self.deriv_check.toggled.connect(self.changed)
-        row.addWidget(self.deriv_check)
+        row.setSpacing(8)
+        self.first_deriv_check = QCheckBox("1st derivative", self)
+        self.second_deriv_check = QCheckBox("2nd derivative", self)
+        self.mark_first_zero_check = QCheckBox("Mark dy/dx = 0", self)
+        self.mark_second_zero_check = QCheckBox("Mark d2y/dx2 = 0", self)
+        self.marker_label_check = QCheckBox("Show marker labels", self)
+        self.deriv_check = self.first_deriv_check
+        for cb in (
+            self.first_deriv_check,
+            self.second_deriv_check,
+            self.mark_first_zero_check,
+            self.mark_second_zero_check,
+            self.marker_label_check,
+        ):
+            cb.setStyleSheet(_CB_SS)
+            cb.toggled.connect(self.changed)
+            row.addWidget(cb)
         row.addStretch(1)
         return row
+
+    def _build_reference_rows(self) -> QVBoxLayout:
+        """Create horizontal and vertical reference-line controls."""
+        col = QVBoxLayout()
+        col.setSpacing(4)
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        self.vertical_line_check = QCheckBox("Vertical line at X", self)
+        self.horizontal_line_check = QCheckBox("Horizontal line at Y", self)
+        self.vertical_line_value = QDoubleSpinBox(self)
+        self.horizontal_line_value = QDoubleSpinBox(self)
+        for spin in (self.vertical_line_value, self.horizontal_line_value):
+            spin.setRange(-1e12, 1e12)
+            spin.setDecimals(6)
+            spin.setSingleStep(1.0)
+            spin.setFixedWidth(156)
+            spin.setStyleSheet(_SPIN_SS)
+        for cb in (self.vertical_line_check, self.horizontal_line_check):
+            cb.setStyleSheet(_CB_SS)
+            cb.toggled.connect(self.changed)
+        self.vertical_line_value.valueChanged.connect(self.changed)
+        self.horizontal_line_value.valueChanged.connect(self.changed)
+        row.addWidget(self.vertical_line_check)
+        row.addWidget(self.vertical_line_value)
+        row.addWidget(self.horizontal_line_check)
+        row.addWidget(self.horizontal_line_value)
+        row.addStretch(1)
+        col.addLayout(row)
+        return col
+
+    def _build_preset_row(self) -> QHBoxLayout:
+        """Create a small post-processing preset selector."""
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        label = QLabel("Post process", self)
+        label.setStyleSheet(_LBL_SS)
+        row.addWidget(label)
+        self.post_preset_combo = AutoCloseComboBox(self)
+        self.post_preset_combo.addItem("Manual", "manual")
+        self.post_preset_combo.addItem("Derivative review", "derivative_review")
+        self.post_preset_combo.addItem("Extrema / inflection", "extrema_inflection")
+        self.post_preset_combo.addItem("Reference lines", "reference_lines")
+        self.post_preset_combo.currentIndexChanged.connect(self._apply_preset)
+        row.addWidget(self.post_preset_combo, 1)
+        return row
+
+    def _apply_preset(self) -> None:
+        """Apply common post-processing checkbox combinations."""
+        preset = self.post_preset_combo.currentData() or "manual"
+        if preset == "derivative_review":
+            self.first_deriv_check.setChecked(True)
+            self.second_deriv_check.setChecked(True)
+        elif preset == "extrema_inflection":
+            self.first_deriv_check.setChecked(True)
+            self.second_deriv_check.setChecked(True)
+            self.mark_first_zero_check.setChecked(True)
+            self.mark_second_zero_check.setChecked(True)
+        elif preset == "reference_lines":
+            self.vertical_line_check.setChecked(True)
+            self.horizontal_line_check.setChecked(True)
+        self.changed.emit()
 
     def _build_fit_rows(self) -> QVBoxLayout:
         """Create the curve-fit controls, model selector, and fit range inputs."""
@@ -1155,18 +2015,256 @@ class AnalysisWidget(QWidget):
             return [f"Smooth: {exc}"]
         return []
 
-    def _derivative(self, fig: go.Figure, x: np.ndarray, y: np.ndarray, name: str) -> list[str]:
-        """Append a derivative overlay trace when derivative mode is enabled."""
-        if not self.deriv_check.isChecked():
+    def _reference_lines(self, fig: go.Figure) -> list[str]:
+        """Add optional horizontal and vertical reference lines to the plot."""
+        parts: list[str] = []
+        line_style = {"color": "#b60021", "width": 2, "dash": "dash"}
+        if self.vertical_line_check.isChecked():
+            x_val = float(self.vertical_line_value.value())
+            fig.add_shape(
+                type="line", x0=x_val, x1=x_val, xref="x",
+                y0=0, y1=1, yref="paper", line=line_style,
+            )
+            parts.append(f"vertical X={x_val:.4g}")
+        if self.horizontal_line_check.isChecked():
+            y_val = float(self.horizontal_line_value.value())
+            fig.add_shape(
+                type="line", x0=0, x1=1, xref="paper",
+                y0=y_val, y1=y_val, yref="y", line=line_style,
+            )
+            parts.append(f"horizontal Y={y_val:.4g}")
+        return parts
+
+    def _reference_intersections(
+        self,
+        fig: go.Figure,
+        x: np.ndarray,
+        y: np.ndarray,
+        series_name: str,
+    ) -> list[str]:
+        """Mark where selected reference lines cross the original data series."""
+        points_x: list[float] = []
+        points_y: list[float] = []
+        labels: list[str] = []
+        if self.vertical_line_check.isChecked():
+            x_val = float(self.vertical_line_value.value())
+            vx, vy = self._vertical_reference_crossings(x, y, x_val)
+            points_x.extend(vx)
+            points_y.extend(vy)
+            if vx:
+                labels.append(f"X={x_val:.4g}")
+        if self.horizontal_line_check.isChecked():
+            y_val = float(self.horizontal_line_value.value())
+            hx, hy = self._horizontal_reference_crossings(x, y, y_val)
+            points_x.extend(hx)
+            points_y.extend(hy)
+            if hx:
+                labels.append(f"Y={y_val:.4g}")
+        if not points_x:
             return []
+        marker_text = [_format_marker_label(px, py) for px, py in zip(points_x, points_y)]
+        fig.add_trace(go.Scatter(
+            x=points_x,
+            y=points_y,
+            mode="markers+text" if self.marker_label_check.isChecked() else "markers",
+            name=f"{series_name} reference crossing",
+            marker={
+                "color": "#b60021",
+                "size": 15,
+                "symbol": "circle",
+                "line": {"color": "white", "width": 2},
+            },
+            text=marker_text if self.marker_label_check.isChecked() else None,
+            textposition=_marker_label_positions(points_x, points_y),
+            textfont={"color": "#b60021", "size": 13},
+        ))
+        return [f"{series_name}: reference crossing at {', '.join(labels)}"]
+
+    @staticmethod
+    def _vertical_reference_crossings(
+        x: np.ndarray,
+        y: np.ndarray,
+        x_value: float,
+    ) -> tuple[list[float], list[float]]:
+        """Return interpolated curve points where x equals the vertical reference."""
+        marker_x: list[float] = []
+        marker_y: list[float] = []
+        xf = np.asarray(x, dtype=float)
+        yf = np.asarray(y, dtype=float)
+        finite = np.isfinite(xf) & np.isfinite(yf)
+        xf = xf[finite]
+        yf = yf[finite]
+        if len(xf) == 0:
+            return marker_x, marker_y
+        tol = max(1e-12, abs(x_value) * 1e-9)
+        for idx in np.where(np.isclose(xf, x_value, rtol=1e-9, atol=tol))[0]:
+            marker_x.append(float(x_value))
+            marker_y.append(float(yf[idx]))
+        if len(xf) < 2:
+            return AnalysisWidget._dedupe_points(marker_x, marker_y)
+        for i in range(len(xf) - 1):
+            x0, x1 = float(xf[i]), float(xf[i + 1])
+            y0, y1 = float(yf[i]), float(yf[i + 1])
+            span = x1 - x0
+            if abs(span) <= tol:
+                continue
+            frac = (x_value - x0) / span
+            if -1e-12 <= frac <= 1 + 1e-12:
+                marker_x.append(float(x_value))
+                marker_y.append(float(y0 + frac * (y1 - y0)))
+        return AnalysisWidget._dedupe_points(marker_x, marker_y)
+
+    @staticmethod
+    def _horizontal_reference_crossings(
+        x: np.ndarray,
+        y: np.ndarray,
+        y_value: float,
+    ) -> tuple[list[float], list[float]]:
+        """Return interpolated curve points where y equals the horizontal reference."""
+        return AnalysisWidget._zero_crossing_points(
+            np.asarray(x, dtype=float),
+            np.asarray(y, dtype=float),
+            np.asarray(y, dtype=float) - y_value,
+        )
+
+    @staticmethod
+    def _dedupe_points(x_vals: list[float], y_vals: list[float]) -> tuple[list[float], list[float]]:
+        """Remove repeated marker coordinates introduced by exact point/segment matches."""
+        out_x: list[float] = []
+        out_y: list[float] = []
+        for x_val, y_val in zip(x_vals, y_vals):
+            if any(abs(x_val - ox) <= 1e-9 and abs(y_val - oy) <= 1e-9 for ox, oy in zip(out_x, out_y)):
+                continue
+            out_x.append(float(x_val))
+            out_y.append(float(y_val))
+        return out_x, out_y
+
+    def _derivatives(self, fig: go.Figure, x: np.ndarray, y: np.ndarray, name: str) -> list[str]:
+        """Append selected derivative overlays and zero-crossing markers."""
+        parts: list[str] = []
         try:
-            dy = np.gradient(y, x)
-            fig.add_trace(go.Scatter(x=x, y=dy, mode="lines",
-                                      name=f"d({name})/dx",
-                                      line={"dash": "dashdot", "width": 1.5}, opacity=0.85))
+            first = np.gradient(y, x)
+            second = np.gradient(first, x)
+            if self.first_deriv_check.isChecked():
+                self._enable_derivative_axis(fig, "y2", "dy/dx", "#b60021", 35)
+                fig.add_trace(go.Scatter(
+                    x=x, y=first, mode="lines", yaxis="y2",
+                    name=f"d({name})/dx",
+                    line={"dash": "dashdot", "width": 3.2, "color": "#b60021"},
+                    opacity=0.9,
+                ))
+                parts.append(f"{name}: dy/dx shown")
+            if self.second_deriv_check.isChecked():
+                self._enable_derivative_axis(fig, "y3", "d2y/dx2", "#2563eb", 155)
+                fig.add_trace(go.Scatter(
+                    x=x, y=second, mode="lines", yaxis="y3",
+                    name=f"d2({name})/dx2",
+                    line={"dash": "dot", "width": 3.2, "color": "#2563eb"},
+                    opacity=0.9,
+                ))
+                parts.append(f"{name}: d2y/dx2 shown")
+            if self.mark_first_zero_check.isChecked():
+                parts.extend(self._add_zero_markers(fig, x, y, first, name, "dy/dx = 0", "#b60021", "x"))
+            if self.mark_second_zero_check.isChecked():
+                parts.extend(self._add_zero_markers(fig, x, y, second, name, "d2y/dx2 = 0", "#2563eb", "diamond"))
         except Exception as exc:
             return [f"Derivative: {exc}"]
-        return []
+        return parts
+
+    def _enable_derivative_axis(
+        self,
+        fig: go.Figure,
+        axis_name: str,
+        title: str,
+        color: str,
+        shift: int,
+    ) -> None:
+        """Configure a right-side derivative axis."""
+        axis_num = axis_name[1:]
+        fig.update_layout(
+            margin={"l": 60, "r": 320, "t": 35, "b": 90},
+            **{
+                f"yaxis{axis_num}": {
+                    "title": {"text": title, "font": {"color": color}, "standoff": 18},
+                    "tickfont": {"color": color},
+                    "ticklen": 6,
+                    "overlaying": "y",
+                    "side": "right",
+                    "anchor": "free",
+                    "position": 1.0,
+                    "shift": shift,
+                    "showgrid": False,
+                    "zeroline": False,
+                }
+            },
+        )
+
+    def _add_zero_markers(
+        self,
+        fig: go.Figure,
+        x: np.ndarray,
+        y: np.ndarray,
+        signal: np.ndarray,
+        series_name: str,
+        label: str,
+        color: str,
+        symbol: str,
+    ) -> list[str]:
+        """Place markers on the original curve where a derivative crosses zero."""
+        marker_x, marker_y = self._zero_crossing_points(x, y, signal)
+        if not marker_x:
+            return [f"{series_name}: no {label} crossing"]
+        marker_text = [_format_marker_label(mx, my) for mx, my in zip(marker_x, marker_y)]
+        fig.add_trace(go.Scatter(
+            x=marker_x,
+            y=marker_y,
+            mode="markers+text" if self.marker_label_check.isChecked() else "markers",
+            name=f"{series_name} {label}",
+            marker={"color": color, "size": 16, "symbol": symbol, "line": {"color": "white", "width": 2.2}},
+            text=marker_text if self.marker_label_check.isChecked() else None,
+            textposition=_marker_label_positions(marker_x, marker_y),
+            textfont={"color": color, "size": 13},
+        ))
+        points = ", ".join(f"x={v:.4g}" for v in marker_x[:4])
+        if len(marker_x) > 4:
+            points += ", ..."
+        return [f"{series_name}: {label} at {points}"]
+
+    @staticmethod
+    def _zero_crossing_points(
+        x: np.ndarray,
+        y: np.ndarray,
+        signal: np.ndarray,
+    ) -> tuple[list[float], list[float]]:
+        """Return interpolated original-curve points where signal crosses zero."""
+        marker_x: list[float] = []
+        marker_y: list[float] = []
+        if len(x) < 2 or len(y) != len(x) or len(signal) != len(x):
+            return marker_x, marker_y
+        tol = 1e-10
+        for idx in range(len(signal) - 1):
+            x0, x1 = float(x[idx]), float(x[idx + 1])
+            y0, y1 = float(y[idx]), float(y[idx + 1])
+            s0, s1 = float(signal[idx]), float(signal[idx + 1])
+            if not all(np.isfinite([x0, x1, y0, y1, s0, s1])):
+                continue
+            crossing_x: float | None = None
+            if abs(s0) <= tol:
+                crossing_x = x0
+            elif s0 * s1 < 0.0:
+                frac = -s0 / (s1 - s0)
+                crossing_x = x0 + frac * (x1 - x0)
+            if crossing_x is None:
+                continue
+            if marker_x and abs(marker_x[-1] - crossing_x) <= tol:
+                continue
+            frac_y = 0.0 if x1 == x0 else (crossing_x - x0) / (x1 - x0)
+            marker_x.append(float(crossing_x))
+            marker_y.append(float(y0 + frac_y * (y1 - y0)))
+        if abs(float(signal[-1])) <= tol and (not marker_x or abs(marker_x[-1] - float(x[-1])) > tol):
+            marker_x.append(float(x[-1]))
+            marker_y.append(float(y[-1]))
+        return marker_x, marker_y
 
     def _fit(self, fig: go.Figure, x: np.ndarray, y: np.ndarray, name: str) -> list[str]:
         """Fit the selected model and append the fitted curve overlay."""
@@ -1292,16 +2390,20 @@ class GraphBuilderCard(BaseGraphPanel):
     # ── public API ───────────────────────────────────────────────────
 
     def set_namespace(
-        self, arrays_1d: dict[str, np.ndarray], arrays_2d: dict[str, np.ndarray]
+        self,
+        arrays_1d: dict[str, np.ndarray],
+        arrays_2d: dict[str, np.ndarray],
+        arrays_3d: dict[str, np.ndarray] | None = None,
     ) -> None:
         """Inject the current arrays and refresh every selector from them."""
         self._nb_arrays_1d = arrays_1d
         self._nb_arrays_2d = arrays_2d
+        self._nb_arrays_3d = dict(arrays_3d or {})
         self._data_source.update_notebook_arrays(arrays_1d)
-        self._axis_selector.populate(self._data_source.active_arrays_1d(), arrays_2d)
+        self._axis_selector.populate(self._data_source.active_arrays_1d(), arrays_2d, self._nb_arrays_3d)
         status = (
-            f"{len(arrays_1d)} 1D array(s), {len(arrays_2d)} 2D array(s)"
-            if arrays_1d or arrays_2d else "No numeric arrays available"
+            f"{len(arrays_1d)} 1D array(s), {len(arrays_2d)} 2D array(s), {len(self._nb_arrays_3d)} 3D array(s)"
+            if arrays_1d or arrays_2d or self._nb_arrays_3d else "No numeric arrays available"
         )
         self._status_label.setText(status)
         self.refresh()
@@ -1328,9 +2430,44 @@ class GraphBuilderCard(BaseGraphPanel):
         style     = self._plot_style.style_options()
         w, h      = self._plot_style.graph_size()
 
-        if mode == "evolution":
+        if mode in {"heatmap", "contour", "contourf", "contourfb"}:
+            field_var, time_var, x_var, y_var = self._axis_selector.heatmap_params()
+            if mode in {"contour", "contourf", "contourfb"}:
+                self._figure = build_notebook_contour_figure(
+                    arrays_1d, self._nb_arrays_2d, self._nb_arrays_3d,
+                    field_var, time_var, x_var, y_var,
+                    self._axis_selector.animate_evolution(),
+                    self._axis_labels.title(), self._axis_labels.x_label(), self._axis_labels.y_label(),
+                    style, self._axis_selector.heatmap_scale_mode(),
+                    *self._axis_selector.heatmap_color_range(),
+                    filled=mode in {"contourf", "contourfb"},
+                    banded=mode == "contourfb",
+                )
+            else:
+                self._figure = build_notebook_heatmap_figure(
+                    arrays_1d, self._nb_arrays_2d, self._nb_arrays_3d,
+                    field_var, time_var, x_var, y_var,
+                    self._axis_selector.animate_evolution(),
+                    self._axis_labels.title(), self._axis_labels.x_label(), self._axis_labels.y_label(),
+                    style, self._axis_selector.heatmap_scale_mode(),
+                    *self._axis_selector.heatmap_color_range(),
+                )
+            overlay_status = ""
+            playback = "animated" if self._axis_selector.animate_evolution() else "static"
+            label = {
+                "contour": "Contour",
+                "contourf": "Filled contour",
+                "contourfb": "Banded contourf",
+            }.get(mode, "Heatmap")
+            base_status = f"{label} ({playback}): field={field_var or 'none'}"
+        elif mode == "evolution":
             matrix_var, time_var, value_var = self._axis_selector.evolution_params()
-            self._figure = build_notebook_evolution_figure(
+            figure_builder = (
+                build_notebook_evolution_animation_figure
+                if self._axis_selector.animate_evolution()
+                else build_notebook_evolution_figure
+            )
+            self._figure = figure_builder(
                 arrays_1d, self._nb_arrays_2d,
                 matrix_var, time_var, value_var,
                 self._axis_selector.plot_type(),
@@ -1340,7 +2477,8 @@ class GraphBuilderCard(BaseGraphPanel):
                 style,
             )
             overlay_status = ""
-            base_status = f"Evolution: matrix={matrix_var or 'none'}"
+            playback = "animated" if self._axis_selector.animate_evolution() else "static"
+            base_status = f"Evolution ({playback}): matrix={matrix_var or 'none'}"
         else:
             x_var  = self._axis_selector.selected_x()
             y_vars = self._axis_selector.selected_y_vars()
@@ -1456,20 +2594,6 @@ class GraphBuilderCard(BaseGraphPanel):
                 settings,
             )
         )
-        sl.addWidget(
-            self._make_section(
-                "Appearance",
-                self._plot_style,
-                settings,
-            )
-        )
-        sl.addWidget(
-            self._make_section(
-                "Labels",
-                self._axis_labels,
-                settings,
-            )
-        )
         if show_analysis:
             sl.addWidget(
                 self._make_section(
@@ -1486,6 +2610,20 @@ class GraphBuilderCard(BaseGraphPanel):
         pvl = QVBoxLayout(preview)
         pvl.setContentsMargins(12, 12, 12, 12)
         pvl.setSpacing(6)
+        pvl.addWidget(
+            self._make_section(
+                "Appearance",
+                self._plot_style,
+                preview,
+            )
+        )
+        pvl.addWidget(
+            self._make_section(
+                "Labels",
+                self._axis_labels,
+                preview,
+            )
+        )
         preview_title = QLabel("Live Preview", preview)
         preview_title.setStyleSheet(_SECTION_TITLE_SS)
         pvl.addWidget(preview_title)
@@ -1544,7 +2682,7 @@ class GraphBuilderCard(BaseGraphPanel):
             self._axis_selector.mode_combo.setEnabled(False)
         else:
             self._axis_selector.mode_combo.setEnabled(True)
-        self._axis_selector.populate(self._data_source.active_arrays_1d(), self._nb_arrays_2d)
+        self._axis_selector.populate(self._data_source.active_arrays_1d(), self._nb_arrays_2d, self._nb_arrays_3d)
         self.refresh()
 
 
@@ -1558,6 +2696,7 @@ class NotebookGraphWorkspace(QWidget):
         super().__init__(parent)
         self._nb_arrays_1d: dict[str, np.ndarray] = {}
         self._nb_arrays_2d: dict[str, np.ndarray] = {}
+        self._nb_arrays_3d: dict[str, np.ndarray] = {}
         self._latest_title = ""
         self._latest_html  = ""
         self._cards: list[GraphBuilderCard] = []
@@ -1592,7 +2731,7 @@ class NotebookGraphWorkspace(QWidget):
         """Append a new graph card below the existing notebook graph cards."""
         card = GraphBuilderCard(self, show_remove=bool(self._cards), show_analysis=False)
         card.remove_requested.connect(self.remove_graph_card)
-        card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
+        card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d, self._nb_arrays_3d)
         card.set_latest_plot(self._latest_title, self._latest_html)
         self._cards.append(card)
         self._root_layout.insertWidget(max(self._root_layout.count() - 1, 0), card)
@@ -1611,9 +2750,9 @@ class NotebookGraphWorkspace(QWidget):
 
     def set_namespace(self, namespace: dict[str, Any]) -> None:
         """Push a new notebook namespace snapshot into every graph card."""
-        self._nb_arrays_1d, self._nb_arrays_2d = extract_notebook_array_variables(namespace)
+        self._nb_arrays_1d, self._nb_arrays_2d, self._nb_arrays_3d = extract_notebook_array_variables_with_3d(namespace)
         for card in self._cards:
-            card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
+            card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d, self._nb_arrays_3d)
 
     def set_latest_plot(self, title: str, html: str) -> None:
         """Push the latest executed plot payload into every graph card."""
@@ -1646,6 +2785,7 @@ class NotebookPlotPanel(QWidget):
         self.setStyleSheet("background:#21252b;")
         self._nb_arrays_1d: dict[str, np.ndarray] = {}
         self._nb_arrays_2d: dict[str, np.ndarray] = {}
+        self._nb_arrays_3d: dict[str, np.ndarray] = {}
         self._extra_cards:  list[GraphBuilderCard] = []
         self._output_widgets: dict[str, tuple[QLabel, QWidget, str]] = {}
         self._output_empty_label: QLabel | None = None
@@ -1688,9 +2828,13 @@ class NotebookPlotPanel(QWidget):
         self.evolution_matrix_combo = self.main_card._axis_selector.evo_matrix_combo
         self.evolution_time_combo   = self.main_card._axis_selector.evo_time_combo
         self.evolution_value_combo  = self.main_card._axis_selector.evo_value_combo
+        self.evolution_y_combo      = self.main_card._axis_selector.evo_y_combo
+        self.evolution_animate_check = self.main_card._axis_selector.evo_animate_check
         self.font_size_combo        = self.main_card._plot_style.font_size_combo
         self.line_width_combo       = self.main_card._plot_style.line_width_combo
         self.marker_size_combo      = self.main_card._plot_style.marker_size_combo
+        self.x_axis_scale_combo     = self.main_card._plot_style.x_axis_scale_combo
+        self.y_axis_scale_combo     = self.main_card._plot_style.y_axis_scale_combo
         self.show_grid_check        = self.main_card._plot_style.grid_check
         self.show_box_check         = self.main_card._plot_style.box_check
         self.ticks_inside_check     = self.main_card._plot_style.ticks_check
@@ -1723,10 +2867,10 @@ class NotebookPlotPanel(QWidget):
 
     def set_namespace(self, namespace: dict[str, Any]) -> None:
         """Refresh all graph cards from the current notebook namespace."""
-        self._nb_arrays_1d, self._nb_arrays_2d = extract_notebook_array_variables(namespace)
-        self.main_card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
+        self._nb_arrays_1d, self._nb_arrays_2d, self._nb_arrays_3d = extract_notebook_array_variables_with_3d(namespace)
+        self.main_card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d, self._nb_arrays_3d)
         for card in self._extra_cards:
-            card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
+            card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d, self._nb_arrays_3d)
 
     def current_controller_figure(self) -> go.Figure:
         """Return the figure currently built by the main graph card."""
@@ -1750,7 +2894,7 @@ class NotebookPlotPanel(QWidget):
         """Append another advanced graph card to the graphs tab."""
         card = GraphBuilderCard(self, show_remove=True, show_analysis=True)
         card.remove_requested.connect(self._remove_extra_graph)
-        card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d)
+        card.set_namespace(self._nb_arrays_1d, self._nb_arrays_2d, self._nb_arrays_3d)
         self._extra_cards.append(card)
         self._root_layout.addWidget(card)
 
@@ -1836,6 +2980,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         super().__init__(parent)
         self._arrays_1d: dict[str, np.ndarray] = {}
         self._arrays_2d: dict[str, np.ndarray] = {}
+        self._arrays_3d: dict[str, np.ndarray] = {}
         # history: list of (label, arrays_1d_snapshot) oldest first
         self._run_history: list[tuple[str, dict[str, np.ndarray]]] = []
         self._current_label: str = "baseline"  # label for whatever is in _arrays_1d now
@@ -1874,6 +3019,10 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._mode_combo = AutoCloseComboBox(card)
         self._mode_combo.addItem("Series (1D)", "series")
         self._mode_combo.addItem("Evolution (2D)", "evolution")
+        self._mode_combo.addItem("Heatmap (2D/3D)", "heatmap")
+        self._mode_combo.addItem("Contour (2D/3D)", "contour")
+        self._mode_combo.addItem("Filled contour (2D/3D)", "contourf")
+        self._mode_combo.addItem("Banded contourf (2D/3D)", "contourfb")
         controls_row.addWidget(self._control_block(card, "Mode", self._mode_combo), 2)
 
         # series controls
@@ -1897,15 +3046,31 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
 
         # evolution controls
         self._evo_widget = QWidget(card)
-        eg = QHBoxLayout(self._evo_widget)
+        eg = QVBoxLayout(self._evo_widget)
         eg.setContentsMargins(0, 0, 0, 0)
-        eg.setSpacing(8)
+        eg.setSpacing(4)
+        self._evo_top_row = QHBoxLayout()
+        self._evo_top_row.setContentsMargins(0, 0, 0, 0)
+        self._evo_top_row.setSpacing(8)
+        self._evo_bottom_row = QHBoxLayout()
+        self._evo_bottom_row.setContentsMargins(0, 0, 0, 0)
+        self._evo_bottom_row.setSpacing(8)
         self._evo_matrix_combo = AutoCloseComboBox(self._evo_widget)
         self._evo_matrix_combo.addItem("Select 2D array", "")
         self._evo_time_combo = AutoCloseComboBox(self._evo_widget)
         self._evo_time_combo.addItem("Row index", "")
         self._evo_value_combo = AutoCloseComboBox(self._evo_widget)
         self._evo_value_combo.addItem("Column index", "")
+        self._evo_y_combo = AutoCloseComboBox(self._evo_widget)
+        self._evo_y_combo.addItem("Row index", "")
+        self._evo_animate_check = QCheckBox("Animate", self._evo_widget)
+        self._evo_animate_check.setStyleSheet(_CB_SS)
+        self._heatmap_scale_combo = AutoCloseComboBox(self._evo_widget)
+        self._heatmap_scale_combo.addItem("Updated scale", "updated")
+        self._heatmap_scale_combo.addItem("Fixed scale", "fixed")
+        self._heatmap_min_spin = _make_heatmap_range_spin(self._evo_widget)
+        self._heatmap_max_spin = _make_heatmap_range_spin(self._evo_widget)
+        self._updating_heatmap_range = False
         self._evo_run_slider = QSlider(Qt.Orientation.Horizontal, self._evo_widget)
         self._evo_run_slider.setRange(0, 0)
         self._evo_run_label = QLabel("current", self._evo_widget)
@@ -1914,12 +3079,23 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         for row_lbl, widget, stretch in (
             ("Array", self._evo_matrix_combo, 2),
             ("Time", self._evo_time_combo, 1),
-            ("Value", self._evo_value_combo, 1),
+            ("Scale", self._heatmap_scale_combo, 1),
+            ("", self._evo_animate_check, 0),
+        ):
+            control = self._control_block(self._evo_widget, row_lbl, widget) if row_lbl else widget
+            self._evo_top_row.addWidget(control, stretch)
+        for row_lbl, widget, stretch in (
+            ("X", self._evo_value_combo, 1),
+            ("Y", self._evo_y_combo, 1),
+            ("Min", self._heatmap_min_spin, 1),
+            ("Max", self._heatmap_max_spin, 1),
             ("Run", self._evo_run_slider, 2),
             ("", self._evo_run_label, 0),
         ):
             control = self._control_block(self._evo_widget, row_lbl, widget) if row_lbl else widget
-            eg.addWidget(control, stretch)
+            self._evo_bottom_row.addWidget(control, stretch)
+        eg.addLayout(self._evo_top_row)
+        eg.addLayout(self._evo_bottom_row)
         self._evo_widget.hide()
         controls_row.addWidget(self._evo_widget, 6)
         cl.addLayout(controls_row)
@@ -1927,8 +3103,8 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
 
         # plot view
         self._plot_view = PlotView(self)
-        self._plot_view.setMinimumHeight(360)
-        self._plot_view.setMaximumHeight(360)
+        self._plot_view.setMinimumHeight(_QUICK_GRAPH_HEIGHT)
+        self._plot_view.setMaximumHeight(_QUICK_GRAPH_HEIGHT)
         self._plot_view._toolbar.hide()
         self._plot_view.hide()
         root.addWidget(self._plot_view)
@@ -1945,17 +3121,24 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._evo_matrix_combo.currentIndexChanged.connect(self._on_matrix_changed)
         self._evo_time_combo.currentIndexChanged.connect(self.refresh)
         self._evo_value_combo.currentIndexChanged.connect(self.refresh)
+        self._evo_y_combo.currentIndexChanged.connect(self.refresh)
+        self._evo_animate_check.toggled.connect(self.refresh)
+        self._heatmap_scale_combo.currentIndexChanged.connect(self.refresh)
+        self._heatmap_min_spin.valueChanged.connect(self._on_heatmap_range_edited)
+        self._heatmap_max_spin.valueChanged.connect(self._on_heatmap_range_edited)
         self._evo_run_slider.valueChanged.connect(self._on_run_changed)
 
     # ── public API ───────────────────────────────────────────────────
 
     def set_namespace(self, namespace: dict[str, Any]) -> None:
         """Update from a main-cell run — clears slider history."""
-        self._arrays_1d, self._arrays_2d = extract_notebook_array_variables(namespace)
+        self._arrays_1d, self._arrays_2d, self._arrays_3d = extract_notebook_array_variables_with_3d(namespace)
         self._run_history.clear()
         self._current_label = "baseline"
         self._clear_hist_btn.hide()
-        self._populate_combos()
+        self._populate_combos(refresh_after=False)
+        self._reset_heatmap_range_from_selection()
+        self._update_run_slider(reset_to_current=True)
         self.refresh()
 
     def _control_block(self, parent: QWidget, label: str, widget: QWidget) -> QWidget:
@@ -1984,7 +3167,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         history: list[tuple[str, dict[str, np.ndarray]]] = []
         current_keys = set(self._arrays_1d)
         for label, arrays in snapshots:
-            saved_1d, _saved_2d = extract_notebook_array_variables(arrays)
+            saved_1d, _saved_2d, _saved_3d = extract_notebook_array_variables_with_3d(arrays)
             if not saved_1d:
                 continue
             if current_keys and not (current_keys & set(saved_1d)):
@@ -1999,8 +3182,8 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
 
     def add_run(self, namespace_snapshot: dict[str, Any], label: str) -> None:
         """Record a slider run: demote current arrays to history, show new as current."""
-        new_1d, new_2d = extract_notebook_array_variables(namespace_snapshot)
-        if not new_1d and not new_2d:
+        new_1d, new_2d, new_3d = extract_notebook_array_variables_with_3d(namespace_snapshot)
+        if not new_1d and not new_2d and not new_3d:
             return
         print(
             f"[debug][quick-graph-evolution] add_run label={label!r} "
@@ -2023,9 +3206,10 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
                 self._run_history.pop(0)
         self._arrays_1d = new_1d
         self._arrays_2d = new_2d
+        self._arrays_3d = new_3d
         self._current_label = label  # the new current data came from this param combo
         self._populate_combos()
-        if (self._mode_combo.currentData() or "series") == "evolution":
+        if (self._mode_combo.currentData() or "series") in {"evolution", "heatmap"}:
             self._update_run_slider(reset_to_current=True)
         self._clear_hist_btn.setVisible(bool(self._run_history))
         self.refresh()
@@ -2043,16 +3227,17 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
     def refresh(self) -> None:
         """Rebuild the quick preview, overlaying all historical runs as faded traces."""
         mode = self._mode_combo.currentData() or "series"
-        style = {"graph_width": None, "graph_height": 360,
+        style = {"graph_width": None, "graph_height": _QUICK_GRAPH_HEIGHT,
                  "font_size": 18, "line_width": 4, "marker_size": 8,
                  "show_grid": True, "show_box": True,
                  "ticks_inside": True, "show_minor_ticks": True}
 
-        if mode == "evolution":
+        if mode in {"evolution", "heatmap", "contour", "contourf", "contourfb"}:
             matrix_var = self._evo_matrix_combo.currentData() or None
-            # Resolve which run's 2D array to use
+            # Resolve which run's field array to use
             arrays_1d_to_use = self._arrays_1d
             arrays_2d_to_use = self._arrays_2d
+            arrays_3d_to_use = self._arrays_3d
             run_label = "current"
             if matrix_var:
                 history = self._saved_matrix_snapshots(matrix_var)  # newest first
@@ -2062,26 +3247,61 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
                     run_idx = self._evo_run_slider.value()
                     if run_idx < n_runs:
                         run_label, arrays = history[run_idx]
-                        saved_1d, saved_2d = extract_notebook_array_variables(arrays)
+                        saved_1d, saved_2d, saved_3d = extract_notebook_array_variables_with_3d(arrays)
                         arrays_1d_to_use = saved_1d or self._arrays_1d
                         arrays_2d_to_use = saved_2d if matrix_var in saved_2d else self._arrays_2d
+                        arrays_3d_to_use = saved_3d if matrix_var in saved_3d else self._arrays_3d
                     else:
                         run_label = "current"
-            self._figure = build_notebook_evolution_figure(
-                arrays_1d_to_use, arrays_2d_to_use,
-                matrix_var,
-                self._evo_time_combo.currentData() or None,
-                self._evo_value_combo.currentData() or None,
-                self._plot_type_combo.currentData() or "lines",
-                run_label if run_label != "current" else "", "", "", style,
-            )
+            if mode in {"heatmap", "contour", "contourf", "contourfb"}:
+                field_args = (
+                    arrays_1d_to_use,
+                    arrays_2d_to_use,
+                    arrays_3d_to_use,
+                    matrix_var,
+                    self._evo_time_combo.currentData() or None,
+                    self._evo_value_combo.currentData() or None,
+                    self._evo_y_combo.currentData() or None,
+                    self._evo_animate_check.isChecked(),
+                    run_label if run_label != "current" else "",
+                    "",
+                    "",
+                    style,
+                    self._heatmap_scale_combo.currentData() or "updated",
+                    self._heatmap_min_spin.value(),
+                    self._heatmap_max_spin.value(),
+                )
+                if mode in {"contour", "contourf", "contourfb"}:
+                    self._figure = build_notebook_contour_figure(
+                        *field_args,
+                        filled=mode in {"contourf", "contourfb"},
+                        banded=mode == "contourfb",
+                    )
+                else:
+                    self._figure = build_notebook_heatmap_figure(*field_args)
+            else:
+                figure_builder = (
+                    build_notebook_evolution_animation_figure
+                    if self._evo_animate_check.isChecked()
+                    else build_notebook_evolution_figure
+                )
+                self._figure = figure_builder(
+                    arrays_1d_to_use, arrays_2d_to_use,
+                    matrix_var,
+                    self._evo_time_combo.currentData() or None,
+                    self._evo_value_combo.currentData() or None,
+                    self._plot_type_combo.currentData() or "lines",
+                    run_label if run_label != "current" else "", "", "", style,
+                )
             print(
                 f"[debug][quick-graph-evolution] refresh matrix={matrix_var!r} "
                 f"run={run_label!r} axes_1d={list(arrays_1d_to_use)} "
-                f"has_matrix={bool(matrix_var and matrix_var in arrays_2d_to_use)}",
+                f"has_matrix={bool(matrix_var and (matrix_var in arrays_2d_to_use or matrix_var in arrays_3d_to_use))} "
+                f"mode={mode} "
+                f"animated={self._evo_animate_check.isChecked()}",
                 flush=True,
             )
-            has_plot = bool(matrix_var and matrix_var in arrays_2d_to_use)
+            has_plot = bool(matrix_var and (matrix_var in arrays_2d_to_use or matrix_var in arrays_3d_to_use))
         else:
             y_vars = [v for v in self._y_combo.checked_values() if isinstance(v, str)]
             x_var  = self._x_combo.currentData() or None
@@ -2196,16 +3416,17 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
 
     # ── private ──────────────────────────────────────────────────────
 
-    def _populate_combos(self) -> None:
+    def _populate_combos(self, refresh_after: bool = True) -> None:
         """Rebuild every quick-preview combo box from the current arrays."""
         prev_x      = self._x_combo.currentData()
         prev_y      = set(self._y_combo.checked_values())
         prev_matrix = self._evo_matrix_combo.currentData()
         prev_time   = self._evo_time_combo.currentData()
         prev_value  = self._evo_value_combo.currentData()
+        prev_heat_y = self._evo_y_combo.currentData()
 
         for combo in (self._x_combo, self._y_combo, self._evo_matrix_combo,
-                      self._evo_time_combo, self._evo_value_combo):
+                      self._evo_time_combo, self._evo_value_combo, self._evo_y_combo):
             combo.blockSignals(True)
 
         self._x_combo.clear()
@@ -2217,51 +3438,92 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._evo_time_combo.addItem("Row index", "")
         self._evo_value_combo.clear()
         self._evo_value_combo.addItem("Column index", "")
+        self._evo_y_combo.clear()
+        self._evo_y_combo.addItem("Row index", "")
 
         for name in self._arrays_1d:
             self._x_combo.addItem(name, name)
             self._evo_time_combo.addItem(name, name)
             self._evo_value_combo.addItem(name, name)
+            self._evo_y_combo.addItem(name, name)
             self._y_combo.add_check_item(name, name, checked=name in prev_y)
         for name in self._arrays_2d:
             self._evo_matrix_combo.addItem(name, name)
+        for name in self._arrays_3d:
+            self._evo_matrix_combo.addItem(f"{name} (t,y,x)", name)
 
         for combo, prev in (
             (self._x_combo, prev_x), (self._evo_matrix_combo, prev_matrix),
             (self._evo_time_combo, prev_time), (self._evo_value_combo, prev_value),
+            (self._evo_y_combo, prev_heat_y),
         ):
             idx = combo.findData(prev)
             if idx >= 0:
                 combo.setCurrentIndex(idx)
 
-        if not prev_y and self._arrays_1d:
-            names = sorted(self._arrays_1d)
-            x_name = self._x_combo.currentData() or ""
-            default = names[1] if len(names) > 1 and x_name == names[0] else names[0]
+        if not self._evo_matrix_combo.currentData() and (self._arrays_2d or self._arrays_3d):
+            source = self._arrays_2d or self._arrays_3d
+            first_matrix = next(iter(source))
+            idx = self._evo_matrix_combo.findData(first_matrix)
+            if idx >= 0:
+                self._evo_matrix_combo.setCurrentIndex(idx)
+
+        valid_y = prev_y & set(self._arrays_1d)
+        if not valid_y and self._arrays_1d:
+            default = _default_series_y_name(self._arrays_1d, self._x_combo.currentData() or "")
             self._y_combo.set_checked_values([default])
 
-        if not prev_matrix and self._arrays_2d:
-            first_matrix = next(iter(self._arrays_2d))
+        if not prev_matrix and (self._arrays_2d or self._arrays_3d):
+            source = self._arrays_2d or self._arrays_3d
+            first_matrix = next(iter(source))
             idx = self._evo_matrix_combo.findData(first_matrix)
             if idx >= 0:
                 self._evo_matrix_combo.setCurrentIndex(idx)
 
         for combo in (self._x_combo, self._y_combo, self._evo_matrix_combo,
-                      self._evo_time_combo, self._evo_value_combo):
+                      self._evo_time_combo, self._evo_value_combo, self._evo_y_combo):
             combo.blockSignals(False)
 
-        self._on_matrix_changed()
+        if refresh_after:
+            self._on_matrix_changed()
 
     def _sync_mode(self) -> None:
         """Swap quick-preview controls between series and evolution layouts."""
         mode = self._mode_combo.currentData() or "series"
         self._series_widget.setVisible(mode == "series")
-        self._evo_widget.setVisible(mode == "evolution")
+        self._evo_widget.setVisible(mode in {"evolution", "heatmap", "contour", "contourf", "contourfb"})
         self.refresh()
 
     def _on_matrix_changed(self) -> None:
+        self._reset_heatmap_range_from_selection()
         self._update_run_slider(reset_to_current=False)
         self.refresh()
+
+    def _reset_heatmap_range_from_selection(self) -> None:
+        matrix_var = self._evo_matrix_combo.currentData()
+        field = self._arrays_3d.get(matrix_var) if matrix_var in self._arrays_3d else self._arrays_2d.get(matrix_var)
+        value_range = _finite_min_max(field)
+        if value_range is None:
+            return
+        self._updating_heatmap_range = True
+        try:
+            self._heatmap_min_spin.blockSignals(True)
+            self._heatmap_max_spin.blockSignals(True)
+            self._heatmap_min_spin.setValue(value_range[0])
+            self._heatmap_max_spin.setValue(value_range[1])
+            self._heatmap_min_spin.blockSignals(False)
+            self._heatmap_max_spin.blockSignals(False)
+        finally:
+            self._updating_heatmap_range = False
+
+    def _on_heatmap_range_edited(self, _value: float) -> None:
+        if self._updating_heatmap_range:
+            return
+        fixed_idx = self._heatmap_scale_combo.findData("fixed")
+        if fixed_idx >= 0 and self._heatmap_scale_combo.currentData() != "fixed":
+            self._heatmap_scale_combo.setCurrentIndex(fixed_idx)
+        else:
+            self.refresh()
 
     def _on_run_changed(self, _val: int) -> None:
         self._update_run_label()

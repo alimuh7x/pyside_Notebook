@@ -1,0 +1,35 @@
+{
+  "version": 6,
+  "layout": {
+    "left_column_width_pct": 50
+  },
+  "cells": [
+    {
+      "id": "cell-diffusion-2d-md",
+      "type": "markdown",
+      "column": "left",
+      "panel_width": null,
+      "source": "# 2D Diffusion Heatmap Evolution\n\nCategory: transport\n\nThis example solves a 2D diffusion equation on an `(x, y)` grid. After running it, use the graph panel in `Heatmap (2D/3D)` mode:\n\n- Static heatmap: select `u`.\n- Animated heatmap: select `u_history`, `time_history`, `x`, and `y`, then enable Animate.\n\nThe history order is `(t, y, x)`, so every saved time step is a full `Ny x Nx` heatmap."
+    },
+    {
+      "id": "cell-diffusion-2d-code",
+      "type": "code",
+      "column": "left",
+      "panel_width": null,
+      "source": "import numpy as np\n\n# -----------------------------------\n# 2D diffusion equation\n# du/dt = D * (d2u/dx2 + d2u/dy2)\n# -----------------------------------\n\n# Grid and time parameters\nLx = 1.0\nLy = 1.0\nNx = 100\nNy = 80\nNt = 160\n\nx = np.linspace(0.0, Lx, Nx)\ny = np.linspace(0.0, Ly, Ny)\nX, Y = np.meshgrid(x, y)\n\ndx = Lx / (Nx - 1)\ndy = Ly / (Ny - 1)\nD = 0.1\ndt = 0.00025\n\nalpha_x = D * dt / dx**2\nalpha_y = D * dt / dy**2\nprint('alpha_x + alpha_y =', alpha_x + alpha_y, '(must be <= 0.5)')\n\nif alpha_x + alpha_y > 0.5:\n    raise ValueError('Explicit diffusion step is unstable. Reduce dt or increase grid spacing.')\n\n# Initial condition: two concentration peaks\nu = (\n    np.exp(-80.0 * ((X - 0.35)**2 + (Y - 0.50)**2))\n    + 0.7 * np.exp(-120.0 * ((X - 0.70)**2 + (Y - 0.35)**2))\n)\n\n# Fixed zero boundary values\nu[0, :] = 0.0\nu[-1, :] = 0.0\nu[:, 0] = 0.0\nu[:, -1] = 0.0\n\n# Time stepping. The notebook records u_history automatically.\nfor n in range(Nt):\n    u_new = u.copy()\n\n    u_new[1:-1, 1:-1] = (\n        u[1:-1, 1:-1]\n        + alpha_x * (u[1:-1, 2:] - 2.0 * u[1:-1, 1:-1] + u[1:-1, :-2])\n        + alpha_y * (u[2:, 1:-1] - 2.0 * u[1:-1, 1:-1] + u[:-2, 1:-1])\n    )\n\n    u_new[0, :] = 0.0\n    u_new[-1, :] = 0.0\n    u_new[:, 0] = 0.0\n    u_new[:, -1] = 0.0\n\n    u = u_new\n\nprint('final u shape =', u.shape)\nprint('For animation: Heatmap (2D/3D) -> array u_history, time time_history, X x, Y y, Animate on.')\n"
+    }
+  ],
+  "metadata": {
+    "version": 6,
+    "title": "2D Diffusion Heatmap Evolution",
+    "category": "transport",
+    "description": "Solve 2D diffusion and animate the full heatmap evolution over time.",
+    "tags": [
+      "numpy",
+      "diffusion",
+      "heatmap",
+      "animation",
+      "finite-difference"
+    ]
+  }
+}

@@ -48,8 +48,8 @@ QMenu::item {
     padding: 6px 26px;
 }
 QMenu::item:selected {
-    color: #ffffff;
-    background: #3e4451;
+    color: #0b1220;
+    background: #61afef;
 }
 QMenu::item:disabled {
     color: #ffffff;
@@ -73,6 +73,39 @@ QTabBar::tab {
 QTabBar::tab:selected {
     background: #001f41;
     color: white;
+    border-bottom: 3px solid #61afef;
+}
+QAbstractItemView {
+    selection-background-color: #61afef;
+    selection-color: #0b1220;
+}
+QCheckBox {
+    spacing: 8px;
+}
+QCheckBox::indicator {
+    width: 15px;
+    height: 15px;
+    border: 2px solid #61afef;
+    border-radius: 4px;
+    background: #21252b;
+}
+QCheckBox::indicator:checked {
+    background: #61afef;
+    border: 2px solid #f8fafc;
+}
+QCheckBox::indicator:hover {
+    border-color: #9cdcfe;
+}
+QRadioButton::indicator {
+    width: 15px;
+    height: 15px;
+    border: 2px solid #94a3b8;
+    border-radius: 8px;
+    background: #21252b;
+}
+QRadioButton::indicator:checked {
+    background: #61afef;
+    border: 3px solid #f8fafc;
 }
 QPushButton {
     background: #001f41;
@@ -134,7 +167,7 @@ def configure_desktop_graphics() -> dict[str, str]:
         "QT_OPENGL": "software",
         "LIBGL_ALWAYS_SOFTWARE": "1",
         "QT_QUICK_BACKEND": "software",
-        "QTWEBENGINE_CHROMIUM_FLAGS": "--disable-gpu --disable-gpu-compositing --disable-features=Vulkan",
+        "QTWEBENGINE_CHROMIUM_FLAGS": "--enable-webgl --ignore-gpu-blocklist --enable-gpu-rasterization --enable-unsafe-swiftshader --disable-features=Vulkan",
     }
     for key, value in defaults.items():
         if key not in os.environ:

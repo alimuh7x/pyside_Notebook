@@ -34,6 +34,11 @@ from pyside_app.plot_view import PlotView
 from utils.formula_parser import FormulaValidationError, evaluate_formula, evaluate_formula_2d, extract_formula_variables
 
 
+_ASSET_DIR = Path(__file__).resolve().parents[1] / "assets"
+_ARROW_UP = str(_ASSET_DIR / "qt_arrow_up.svg").replace("\\", "/")
+_ARROW_DOWN = str(_ASSET_DIR / "qt_arrow_down.svg").replace("\\", "/")
+
+
 FORMULA_TAB_STYLE = """
 #FormulaPlotTab {
     background: #21252b;
@@ -48,11 +53,53 @@ FORMULA_TAB_STYLE = """
     color: #d7dae0;
     font-size: 12px;
 }
+#FormulaPlotTab QComboBox {
+    padding-right: 28px;
+}
+#FormulaPlotTab QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: right center;
+    width: 22px;
+    border-left: 1px solid #3e4451;
+    background: #3e4451;
+}
+#FormulaPlotTab QComboBox::down-arrow {
+    image: url(__ARROW_DOWN__);
+    width: 10px;
+    height: 10px;
+}
+#FormulaPlotTab QSpinBox {
+    padding-right: 28px;
+}
+#FormulaPlotTab QSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 22px;
+    border-left: 1px solid #3e4451;
+    background: #3e4451;
+}
+#FormulaPlotTab QSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 22px;
+    border-left: 1px solid #3e4451;
+    background: #3e4451;
+}
+#FormulaPlotTab QSpinBox::up-arrow {
+    image: url(__ARROW_UP__);
+    width: 10px;
+    height: 10px;
+}
+#FormulaPlotTab QSpinBox::down-arrow {
+    image: url(__ARROW_DOWN__);
+    width: 10px;
+    height: 10px;
+}
 #FormulaPlotTab QComboBox QAbstractItemView {
     background: #282c34;
     color: #f8fafc;
-    selection-background-color: #3e4451;
-    selection-color: #ffffff;
+    selection-background-color: #61afef;
+    selection-color: #0b1220;
     border: 1px solid #4b5563;
     outline: 0;
     padding: 4px;
@@ -65,6 +112,24 @@ FORMULA_TAB_STYLE = """
     color: #d7dae0;
     font-size: 12px;
 }
+#FormulaPlotTab QCheckBox {
+    spacing: 8px;
+}
+#FormulaPlotTab QCheckBox::indicator {
+    width: 15px;
+    height: 15px;
+    border: 2px solid #61afef;
+    border-radius: 4px;
+    background: #21252b;
+}
+#FormulaPlotTab QCheckBox::indicator:hover {
+    border-color: #9cdcfe;
+    background: #2c313a;
+}
+#FormulaPlotTab QCheckBox::indicator:checked {
+    background: #61afef;
+    border: 2px solid #f8fafc;
+}
 #FormulaPlotTab QTextBrowser {
     border: 1px solid #3e4451;
     border-radius: 7px;
@@ -73,7 +138,7 @@ FORMULA_TAB_STYLE = """
     padding: 8px;
     font-size: 12px;
 }
-""".strip()
+""".strip().replace("__ARROW_UP__", _ARROW_UP).replace("__ARROW_DOWN__", _ARROW_DOWN)
 
 FORMULA_BUTTON_STYLE = """
 QPushButton {
