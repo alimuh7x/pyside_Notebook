@@ -602,38 +602,11 @@ def build_notebook_evolution_animation_figure(
         "frame": {"duration": 0, "redraw": redraw_frames},
         "transition": {"duration": 0},
     }
-    play_frame_args = {
-        "mode": "immediate",
-        "frame": {"duration": _EVO_ANIMATION_FRAME_MS, "redraw": redraw_frames},
-        "transition": {"duration": 0},
-        "fromcurrent": True,
-    }
     fig.update_layout(
-        updatemenus=[{
-            "type": "buttons",
-            "direction": "left",
-            "x": 0.78,
-            "y": -0.18,
-            "xanchor": "left",
-            "yanchor": "top",
-            "showactive": False,
-            "buttons": [
-                {
-                    "label": "Play",
-                    "method": "animate",
-                    "args": [None, play_frame_args],
-                },
-                {
-                    "label": "Pause",
-                    "method": "animate",
-                    "args": [[None], slider_frame_args],
-                },
-            ],
-        }],
         sliders=[{
             "active": 0,
             "currentvalue": {"prefix": "Time ", "font": {"size": fs}},
-            "pad": {"t": 58, "b": 8},
+            "pad": {"t": 40, "b": 8},
             "steps": [
                 {
                     "label": frame_labels[i],
@@ -643,7 +616,7 @@ def build_notebook_evolution_animation_figure(
                 for i in range(rows)
             ],
         }],
-        margin={"l": 70, "r": 80, "t": 45, "b": 170},
+        margin={"l": 70, "r": 80, "t": 45, "b": 120},
     )
     print(
         f"[debug][notebook-evolution-animation] output frames={len(fig.frames)} "
@@ -2981,24 +2954,12 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._arrays_1d: dict[str, np.ndarray] = {}
         self._arrays_2d: dict[str, np.ndarray] = {}
         self._arrays_3d: dict[str, np.ndarray] = {}
-        # history: list of (label, arrays_1d_snapshot) oldest first
-        self._run_history: list[tuple[str, dict[str, np.ndarray]]] = []
-        self._current_label: str = "baseline"  # label for whatever is in _arrays_1d now
-        self._MAX_HISTORY = 8
-
+        self._run_history: list[tuple[str, dict, dict, dict]] = []
+        self._evo_dirty = True
+        self._animation_playing = False
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(8)
-
-        self._clear_hist_btn = QPushButton("Clear history", self)
-        self._clear_hist_btn.setFixedHeight(22)
-        self._clear_hist_btn.setStyleSheet(
-            "QPushButton { font-size:14px; padding:2px 8px; border:1px solid #3e4451;"
-            " border-radius:3px; background:#3e4451; color:#d7dae0; }"
-            "QPushButton:hover { background:#4a5568; }"
-        )
-        self._clear_hist_btn.clicked.connect(self.clear_history)
-        self._clear_hist_btn.hide()
 
         self._status_label = QLabel("Use the quick controls to preview graphs.", self)
         self._status_label.setStyleSheet("color:#5c6370; font-size:14px;")
@@ -3025,6 +2986,19 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._mode_combo.addItem("Banded contourf (2D/3D)", "contourfb")
         controls_row.addWidget(self._control_block(card, "Mode", self._mode_combo), 2)
 
+        self._run_combo = CheckableComboBox(card)
+        self._run_combo.add_check_item("Current", -1, checked=True)
+        self._run_combo.setMinimumWidth(180)
+        self._run_combo_block = self._control_block(card, "Run", self._run_combo)
+        controls_row.addWidget(self._run_combo_block, 3)
+
+        self._run_combo_evo = AutoCloseComboBox(card)
+        self._run_combo_evo.addItem("Current", -1)
+        self._run_combo_evo.setMinimumWidth(180)
+        self._run_combo_evo_block = self._control_block(card, "Run", self._run_combo_evo)
+        self._run_combo_evo_block.hide()
+        controls_row.addWidget(self._run_combo_evo_block, 3)
+
         # series controls
         self._series_widget = QWidget(card)
         sr = QHBoxLayout(self._series_widget)
@@ -3044,17 +3018,11 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             sr.addWidget(self._control_block(self._series_widget, lbl_text, widget), stretch)
         controls_row.addWidget(self._series_widget, 6)
 
-        # evolution controls
+        # evolution controls — single flat row
         self._evo_widget = QWidget(card)
-        eg = QVBoxLayout(self._evo_widget)
-        eg.setContentsMargins(0, 0, 0, 0)
-        eg.setSpacing(4)
-        self._evo_top_row = QHBoxLayout()
-        self._evo_top_row.setContentsMargins(0, 0, 0, 0)
-        self._evo_top_row.setSpacing(8)
-        self._evo_bottom_row = QHBoxLayout()
-        self._evo_bottom_row.setContentsMargins(0, 0, 0, 0)
-        self._evo_bottom_row.setSpacing(8)
+        er = QHBoxLayout(self._evo_widget)
+        er.setContentsMargins(0, 0, 0, 0)
+        er.setSpacing(8)
         self._evo_matrix_combo = AutoCloseComboBox(self._evo_widget)
         self._evo_matrix_combo.addItem("Select 2D array", "")
         self._evo_time_combo = AutoCloseComboBox(self._evo_widget)
@@ -3063,41 +3031,40 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._evo_value_combo.addItem("Column index", "")
         self._evo_y_combo = AutoCloseComboBox(self._evo_widget)
         self._evo_y_combo.addItem("Row index", "")
-        self._evo_animate_check = QCheckBox("Animate", self._evo_widget)
-        self._evo_animate_check.setStyleSheet(_CB_SS)
         self._heatmap_scale_combo = AutoCloseComboBox(self._evo_widget)
         self._heatmap_scale_combo.addItem("Updated scale", "updated")
         self._heatmap_scale_combo.addItem("Fixed scale", "fixed")
         self._heatmap_min_spin = _make_heatmap_range_spin(self._evo_widget)
         self._heatmap_max_spin = _make_heatmap_range_spin(self._evo_widget)
         self._updating_heatmap_range = False
-        self._evo_run_slider = QSlider(Qt.Orientation.Horizontal, self._evo_widget)
-        self._evo_run_slider.setRange(0, 0)
-        self._evo_run_label = QLabel("current", self._evo_widget)
-        self._evo_run_label.setStyleSheet(_MUTED_SS)
-        self._evo_run_label.setMinimumWidth(80)
         for row_lbl, widget, stretch in (
             ("Array", self._evo_matrix_combo, 2),
             ("Time", self._evo_time_combo, 1),
-            ("Scale", self._heatmap_scale_combo, 1),
-            ("", self._evo_animate_check, 0),
-        ):
-            control = self._control_block(self._evo_widget, row_lbl, widget) if row_lbl else widget
-            self._evo_top_row.addWidget(control, stretch)
-        for row_lbl, widget, stretch in (
             ("X", self._evo_value_combo, 1),
             ("Y", self._evo_y_combo, 1),
+            ("Scale", self._heatmap_scale_combo, 1),
             ("Min", self._heatmap_min_spin, 1),
             ("Max", self._heatmap_max_spin, 1),
-            ("Run", self._evo_run_slider, 2),
-            ("", self._evo_run_label, 0),
         ):
-            control = self._control_block(self._evo_widget, row_lbl, widget) if row_lbl else widget
-            self._evo_bottom_row.addWidget(control, stretch)
-        eg.addLayout(self._evo_top_row)
-        eg.addLayout(self._evo_bottom_row)
+            er.addWidget(self._control_block(self._evo_widget, row_lbl, widget), stretch)
+        self._evo_x_block     = er.itemAt(2).widget()
+        self._evo_y_block     = er.itemAt(3).widget()
+        self._heatmap_scale_block = er.itemAt(4).widget()
+        self._heatmap_min_block   = er.itemAt(5).widget()
+        self._heatmap_max_block   = er.itemAt(6).widget()
         self._evo_widget.hide()
         controls_row.addWidget(self._evo_widget, 6)
+
+        self._play_btn = QPushButton("▶", card)
+        self._play_btn.setFixedSize(36, 36)
+        self._play_btn.setToolTip("Refresh graph")
+        self._play_btn.setStyleSheet(
+            "QPushButton { background:#98c379; color:#282c34; border:none;"
+            " border-radius:6px; font-size:16px; font-weight:700; }"
+            "QPushButton:hover { background:#a8d389; }"
+            "QPushButton:pressed { background:#7aab5a; }"
+        )
+        controls_row.addWidget(self._play_btn, 0)
         cl.addLayout(controls_row)
         root.addWidget(card)
 
@@ -3115,31 +3082,76 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
 
         # signals
         self._mode_combo.currentIndexChanged.connect(self._sync_mode)
-        self._x_combo.currentIndexChanged.connect(self.refresh)
-        self._y_combo.checkedItemsChanged.connect(self.refresh)
-        self._plot_type_combo.currentIndexChanged.connect(self.refresh)
+        self._x_combo.currentIndexChanged.connect(self._on_series_changed)
+        self._y_combo.checkedItemsChanged.connect(self._on_series_changed)
+        self._plot_type_combo.currentIndexChanged.connect(self._on_series_changed)
         self._evo_matrix_combo.currentIndexChanged.connect(self._on_matrix_changed)
-        self._evo_time_combo.currentIndexChanged.connect(self.refresh)
-        self._evo_value_combo.currentIndexChanged.connect(self.refresh)
-        self._evo_y_combo.currentIndexChanged.connect(self.refresh)
-        self._evo_animate_check.toggled.connect(self.refresh)
-        self._heatmap_scale_combo.currentIndexChanged.connect(self.refresh)
+        self._evo_time_combo.currentIndexChanged.connect(self._on_evo_axis_changed)
+        self._evo_value_combo.currentIndexChanged.connect(self._on_evo_axis_changed)
+        self._evo_y_combo.currentIndexChanged.connect(self._on_evo_axis_changed)
+        self._heatmap_scale_combo.currentIndexChanged.connect(self._on_evo_axis_changed)
         self._heatmap_min_spin.valueChanged.connect(self._on_heatmap_range_edited)
         self._heatmap_max_spin.valueChanged.connect(self._on_heatmap_range_edited)
-        self._evo_run_slider.valueChanged.connect(self._on_run_changed)
+        self._run_combo.checkedItemsChanged.connect(self._on_run_combo_changed)
+        self._run_combo_evo.currentIndexChanged.connect(self._on_run_evo_changed)
+        self._play_btn.clicked.connect(self._on_play_clicked)
 
     # ── public API ───────────────────────────────────────────────────
 
     def set_namespace(self, namespace: dict[str, Any]) -> None:
-        """Update from a main-cell run — clears slider history."""
+        """Update arrays from the notebook namespace and repopulate combo options."""
         self._arrays_1d, self._arrays_2d, self._arrays_3d = extract_notebook_array_variables_with_3d(namespace)
-        self._run_history.clear()
-        self._current_label = "baseline"
-        self._clear_hist_btn.hide()
+        self._evo_dirty = True
+        self._animation_playing = False
+        self._play_btn.setText("▶")
         self._populate_combos(refresh_after=False)
         self._reset_heatmap_range_from_selection()
-        self._update_run_slider(reset_to_current=True)
-        self.refresh()
+        self._auto_preview()
+
+    def _auto_preview(self) -> None:
+        """Show a static preview appropriate for the current mode."""
+        mode = self._mode_combo.currentData() or "series"
+        if mode == "evolution":
+            self._render_evo_static()
+        else:
+            self.refresh()
+
+    def _render_evo_static(self) -> None:
+        """Render up to 5 sampled time-slice lines as a static preview."""
+        arrays_1d, arrays_2d = self._arrays_1d, self._arrays_2d
+        run_val = self._run_combo_evo.currentData()
+        if isinstance(run_val, int) and run_val >= 0 and run_val < len(self._run_history):
+            _, arrays_1d, arrays_2d, _ = self._run_history[run_val]
+        matrix_var = self._evo_matrix_combo.currentData() or None
+        value_var = self._evo_value_combo.currentData() or None
+        if value_var is None and matrix_var and matrix_var in arrays_2d:
+            mat = arrays_2d[matrix_var]
+            cols = mat.shape[1] if mat.ndim >= 2 else None
+            if cols:
+                value_var = next((n for n, a in arrays_1d.items() if len(a) == cols), None)
+        style = {"graph_width": None, "graph_height": _QUICK_GRAPH_HEIGHT,
+                 "font_size": 18, "line_width": 4, "marker_size": 8,
+                 "show_grid": True, "show_box": True,
+                 "ticks_inside": True, "show_minor_ticks": True}
+        self._figure = build_notebook_evolution_figure(
+            arrays_1d, arrays_2d, matrix_var,
+            self._evo_time_combo.currentData() or None,
+            value_var,
+            self._plot_type_combo.currentData() or "lines",
+            "", "", "", style,
+        )
+        has_plot = bool(matrix_var and matrix_var in arrays_2d)
+        html = self._figure.to_html(
+            include_plotlyjs=True, full_html=False,
+            config={"responsive": True, "displaylogo": False},
+        )
+        self._plot_view.setVisible(has_plot)
+        self._empty_label.setVisible(not has_plot)
+        if has_plot:
+            self._plot_view.set_html(html)
+        self._status_label.setText(
+            "Press ▶ to animate" if has_plot else "Run code to populate arrays."
+        )
 
     def _control_block(self, parent: QWidget, label: str, widget: QWidget) -> QWidget:
         block = QWidget(parent)
@@ -3152,118 +3164,33 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         layout.addWidget(widget)
         return block
 
-    def set_current_label(self, label: str) -> None:
-        """Set the label for the current namespace snapshot."""
-        self._current_label = label or "current"
-
-    def load_saved_runs_from_store(self) -> None:
-        """Load saved parameter runs for a newly created graph panel."""
-        if not self._arrays_1d:
-            self._update_run_slider(reset_to_current=True)
-            return
-        from pyside_app import array_store
-        anchor_name = next(iter(self._arrays_1d))
-        snapshots = array_store.get_run_snapshots(anchor_name)
-        history: list[tuple[str, dict[str, np.ndarray]]] = []
-        current_keys = set(self._arrays_1d)
-        for label, arrays in snapshots:
-            saved_1d, _saved_2d, _saved_3d = extract_notebook_array_variables_with_3d(arrays)
-            if not saved_1d:
-                continue
-            if current_keys and not (current_keys & set(saved_1d)):
-                continue
-            if label == self._current_label:
-                continue
-            history.append((label, {k: v.copy() for k, v in saved_1d.items()}))
-        self._run_history = list(reversed(history[: self._MAX_HISTORY]))
-        self._clear_hist_btn.setVisible(bool(self._run_history))
-        self._update_run_slider(reset_to_current=True)
-        self.refresh()
-
-    def add_run(self, namespace_snapshot: dict[str, Any], label: str) -> None:
-        """Record a slider run: demote current arrays to history, show new as current."""
-        new_1d, new_2d, new_3d = extract_notebook_array_variables_with_3d(namespace_snapshot)
-        if not new_1d and not new_2d and not new_3d:
-            return
-        print(
-            f"[debug][quick-graph-evolution] add_run label={label!r} "
-            f"arrays_1d={list(new_1d)} arrays_2d={list(new_2d)}",
-            flush=True,
-        )
-        # Demote current arrays to history.  Filter the stored label to only
-        # the keys that appear in the incoming label so we don't show every
-        # param when only one changed (e.g. show "E_alpha=-0.4" not all params).
-        if self._arrays_1d:
-            new_keys = {p.split("=")[0].strip() for p in label.replace("  ", " ").split() if "=" in p}
-            if new_keys:
-                kept = [p for p in self._current_label.split("  ")
-                        if any(p.strip().startswith(k + "=") for k in new_keys)]
-                history_label = "  ".join(kept) if kept else self._current_label
-            else:
-                history_label = self._current_label
-            self._run_history.append((history_label, {k: v.copy() for k, v in self._arrays_1d.items()}))
-            if len(self._run_history) > self._MAX_HISTORY:
-                self._run_history.pop(0)
-        self._arrays_1d = new_1d
-        self._arrays_2d = new_2d
-        self._arrays_3d = new_3d
-        self._current_label = label  # the new current data came from this param combo
-        self._populate_combos()
-        if (self._mode_combo.currentData() or "series") in {"evolution", "heatmap"}:
-            self._update_run_slider(reset_to_current=True)
-        self._clear_hist_btn.setVisible(bool(self._run_history))
-        self.refresh()
-
-    def clear_history(self) -> None:
-        """Remove all accumulated slider-run traces."""
-        self._run_history.clear()
-        self._clear_hist_btn.hide()
-        self.refresh()
-
     def download_png(self) -> None:
         """Save the current graph as a PNG file."""
         self._plot_view._download_png()
 
     def refresh(self) -> None:
-        """Rebuild the quick preview, overlaying all historical runs as faded traces."""
+        """Render the graph from the current namespace and any checked history runs."""
         mode = self._mode_combo.currentData() or "series"
+        arrays_1d, arrays_2d, arrays_3d = self._arrays_1d, self._arrays_2d, self._arrays_3d
         style = {"graph_width": None, "graph_height": _QUICK_GRAPH_HEIGHT,
                  "font_size": 18, "line_width": 4, "marker_size": 8,
                  "show_grid": True, "show_box": True,
                  "ticks_inside": True, "show_minor_ticks": True}
 
         if mode in {"evolution", "heatmap", "contour", "contourf", "contourfb"}:
+            run_val = self._run_combo_evo.currentData()
+            if isinstance(run_val, int) and run_val >= 0 and run_val < len(self._run_history):
+                _, arrays_1d, arrays_2d, arrays_3d = self._run_history[run_val]
             matrix_var = self._evo_matrix_combo.currentData() or None
-            # Resolve which run's field array to use
-            arrays_1d_to_use = self._arrays_1d
-            arrays_2d_to_use = self._arrays_2d
-            arrays_3d_to_use = self._arrays_3d
-            run_label = "current"
-            if matrix_var:
-                history = self._saved_matrix_snapshots(matrix_var)  # newest first
-                n_runs = len(history)
-                if n_runs > 0:
-                    # slider 0 = most recent run, slider n_runs = current namespace
-                    run_idx = self._evo_run_slider.value()
-                    if run_idx < n_runs:
-                        run_label, arrays = history[run_idx]
-                        saved_1d, saved_2d, saved_3d = extract_notebook_array_variables_with_3d(arrays)
-                        arrays_1d_to_use = saved_1d or self._arrays_1d
-                        arrays_2d_to_use = saved_2d if matrix_var in saved_2d else self._arrays_2d
-                        arrays_3d_to_use = saved_3d if matrix_var in saved_3d else self._arrays_3d
-                    else:
-                        run_label = "current"
             if mode in {"heatmap", "contour", "contourf", "contourfb"}:
                 field_args = (
-                    arrays_1d_to_use,
-                    arrays_2d_to_use,
-                    arrays_3d_to_use,
+                    arrays_1d, arrays_2d, arrays_3d,
                     matrix_var,
                     self._evo_time_combo.currentData() or None,
                     self._evo_value_combo.currentData() or None,
                     self._evo_y_combo.currentData() or None,
-                    self._evo_animate_check.isChecked(),
-                    run_label if run_label != "current" else "",
+                    False,
+                    "",
                     "",
                     "",
                     style,
@@ -3280,115 +3207,68 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
                 else:
                     self._figure = build_notebook_heatmap_figure(*field_args)
             else:
-                figure_builder = (
-                    build_notebook_evolution_animation_figure
-                    if self._evo_animate_check.isChecked()
-                    else build_notebook_evolution_figure
-                )
-                self._figure = figure_builder(
-                    arrays_1d_to_use, arrays_2d_to_use,
+                value_var = self._evo_value_combo.currentData() or None
+                if value_var is None and matrix_var and matrix_var in arrays_2d:
+                    cols = arrays_2d[matrix_var].shape[1] if arrays_2d[matrix_var].ndim >= 2 else None
+                    if cols:
+                        value_var = next((n for n, a in arrays_1d.items() if len(a) == cols), None)
+                self._figure = build_notebook_evolution_animation_figure(
+                    arrays_1d, arrays_2d,
                     matrix_var,
                     self._evo_time_combo.currentData() or None,
-                    self._evo_value_combo.currentData() or None,
+                    value_var,
                     self._plot_type_combo.currentData() or "lines",
-                    run_label if run_label != "current" else "", "", "", style,
+                    "", "", "", style,
                 )
-            print(
-                f"[debug][quick-graph-evolution] refresh matrix={matrix_var!r} "
-                f"run={run_label!r} axes_1d={list(arrays_1d_to_use)} "
-                f"has_matrix={bool(matrix_var and (matrix_var in arrays_2d_to_use or matrix_var in arrays_3d_to_use))} "
-                f"mode={mode} "
-                f"animated={self._evo_animate_check.isChecked()}",
-                flush=True,
-            )
-            has_plot = bool(matrix_var and (matrix_var in arrays_2d_to_use or matrix_var in arrays_3d_to_use))
+            has_plot = bool(matrix_var and (matrix_var in arrays_2d or matrix_var in arrays_3d))
         else:
             y_vars = [v for v in self._y_combo.checked_values() if isinstance(v, str)]
             x_var  = self._x_combo.currentData() or None
             plot_type = self._plot_type_combo.currentData() or "lines"
-            # Build the full-resolution line figure; markers are overlaid separately
-            self._figure = build_notebook_plot_figure(
-                self._arrays_1d, x_var, y_vars, "lines",
-                "", "", "", {}, style,
-            )
-            # Force explicit per-trace line colors so markers can match
-            for i, trace in enumerate(self._figure.data):
-                trace.update(line=dict(color=_QUICK_COLORS[i % len(_QUICK_COLORS)]))
-            # Overlay 12 evenly-spaced markers on top for lines+markers mode
-            if plot_type == "lines+markers":
-                x_full = self._arrays_1d.get(x_var) if x_var else None
-                for y_idx, y_var in enumerate(y_vars):
-                    y_full = self._arrays_1d.get(y_var)
-                    if y_full is None:
+
+            # Build list of (label, arrays_1d) for every checked run
+            selected_runs: list[tuple[str, dict]] = []
+            for val in self._run_combo.checked_data():
+                if val == -1:
+                    selected_runs.append(("", self._arrays_1d))
+                elif isinstance(val, int) and 0 <= val < len(self._run_history):
+                    lbl, h1d, _, _ = self._run_history[val]
+                    selected_runs.append((lbl, h1d))
+            if not selected_runs:
+                selected_runs = [("", self._arrays_1d)]
+
+            self._figure = go.Figure()
+            color_idx = 0
+            for run_label, run_1d in selected_runs:
+                x_full = run_1d.get(x_var) if x_var else None
+                for y_var in y_vars:
+                    y_data = run_1d.get(y_var)
+                    if y_data is None:
                         continue
-                    color  = _QUICK_COLORS[y_idx % len(_QUICK_COLORS)]
-                    # run 0 = current trace, symbol index 0
-                    symbol = _QUICK_SYMBOLS[0]
-                    x_for_markers = x_full if x_full is not None else np.arange(len(y_full))
-                    self._figure.add_scatter(
-                        x=_subsample(x_for_markers), y=_subsample(y_full),
-                        mode="markers",
-                        marker=dict(size=11, color=color, symbol=symbol),
-                        showlegend=False,
-                    )
-            has_plot = bool(y_vars)
-
-            # ── label current trace and force legend when history exists ──────
-            if has_plot and self._run_history:
-                self._figure.update_layout(showlegend=True)
-                cur_lbl = self._current_label[:40] if len(self._current_label) > 40 else self._current_label
-                for trace in self._figure.data:
-                    trace.name = cur_lbl if len(y_vars) == 1 else f"{trace.name} | {cur_lbl}"
-
-            # ── overlay historical traces ─────────────────────────────────────
-            if has_plot and self._run_history:
-                x_current = self._arrays_1d.get(x_var) if x_var else None
-                _HIST_COLORS = [
-                    "#e07b39", "#9b59b6", "#27ae60", "#c0392b",
-                    "#16a085", "#8e44ad", "#d35400", "#2980b9",
-                ]
-                # Draw oldest first so newest sits on top
-                for h_idx, (h_label, h_arrays) in enumerate(reversed(self._run_history)):
-                    opacity = max(0.3, 0.9 - h_idx * 0.08)
-                    color = _HIST_COLORS[h_idx % len(_HIST_COLORS)]
-                    x_data = h_arrays.get(x_var) if x_var else None
-                    if x_data is None:
-                        x_data = x_current
-                    for y_idx, y_var in enumerate(y_vars):
-                        y_data = h_arrays.get(y_var)
-                        if y_data is None:
-                            continue
-                        # h_idx 0 = oldest history → symbol index 1 (current is 0)
-                        symbol = _QUICK_SYMBOLS[(h_idx + 1) % len(_QUICK_SYMBOLS)]
-                        # Filter history label to only the keys present in cur_lbl
-                        if cur_lbl and "=" in cur_lbl:
-                            cur_keys = {p.split("=")[0].strip() for p in cur_lbl.replace("  ", " ").split() if "=" in p}
-                            kept = [p for p in h_label.split("  ") if any(p.strip().startswith(k + "=") for k in cur_keys)]
-                            filtered = "  ".join(kept) if kept else h_label
-                        else:
-                            filtered = h_label
-                        short_label = filtered[:40] if len(filtered) > 40 else filtered
-                        trace_name = f"{short_label} | {y_var}" if len(y_vars) > 1 else short_label
-                        # Full-resolution line trace
+                    x_plot = x_full if x_full is not None and len(x_full) == len(y_data) else np.arange(len(y_data))
+                    color = _QUICK_COLORS[color_idx % len(_QUICK_COLORS)]
+                    symbol = _QUICK_SYMBOLS[color_idx % len(_QUICK_SYMBOLS)]
+                    name = y_var if not run_label else f"{y_var} | {run_label}"
+                    self._figure.add_trace(go.Scatter(
+                        x=x_plot, y=y_data, mode="lines", name=name,
+                        line=dict(color=color, width=4),
+                    ))
+                    if plot_type == "lines+markers":
                         self._figure.add_scatter(
-                            x=x_data, y=y_data,
-                            mode="lines",
-                            name=trace_name,
-                            line=dict(color=color, width=4),
-                            opacity=opacity,
-                            showlegend=True,
+                            x=_subsample(x_plot), y=_subsample(y_data),
+                            mode="markers",
+                            marker=dict(size=11, color=color, symbol=symbol),
+                            showlegend=False,
                         )
-                        # 12-point marker overlay for lines+markers
-                        if plot_type == "lines+markers":
-                            x_for_markers = x_data if x_data is not None else np.arange(len(y_data))
-                            self._figure.add_scatter(
-                                x=_subsample(x_for_markers), y=_subsample(y_data),
-                                mode="markers",
-                                marker=dict(color=color, size=10, symbol=symbol),
-                                opacity=opacity,
-                                showlegend=False,
-                            )
-                        # bar / histogram history not shown
+                    color_idx += 1
+            _apply_layout(
+                self._figure, title=None,
+                x_title=x_var or "index",
+                y_title=y_vars[0] if len(y_vars) == 1 else "value",
+                showlegend=color_idx > 1,
+                style=style,
+            )
+            has_plot = bool(y_vars)
 
         if not has_plot and self._latest_html:
             self._plot_view.setVisible(True)
@@ -3399,20 +3279,34 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             )
             return
 
+        post_script = None
+        if getattr(self._figure, "frames", None):
+            post_script = (
+                "setTimeout(function(){"
+                "var gd=document.querySelector('.js-plotly-plot');"
+                "if(gd){Plotly.animate(gd,null,{"
+                "mode:'immediate',"
+                f"frame:{{duration:{_EVO_ANIMATION_FRAME_MS},redraw:false}},"
+                "transition:{duration:0},fromcurrent:false});}"
+                "},200);"
+            )
         html = self._figure.to_html(
             include_plotlyjs=True, full_html=False,
             config={"responsive": True, "displaylogo": False},
+            post_script=post_script,
         )
         self._plot_view.setVisible(has_plot)
         self._empty_label.setVisible(not has_plot)
         if has_plot:
             self._plot_view.set_html(html)
-        n_hist = len(self._run_history)
-        hist_note = f"  +{n_hist} saved" if n_hist else ""
         self._status_label.setText(
-            f"x={self._x_combo.currentData() or 'index'}{hist_note}"
+            f"x={self._x_combo.currentData() or 'index'}"
             if has_plot else "Run code to populate arrays."
         )
+        if mode in {"evolution"} and has_plot and post_script:
+            self._evo_dirty = False
+            self._animation_playing = True
+            self._play_btn.setText("⏸")
 
     # ── private ──────────────────────────────────────────────────────
 
@@ -3490,14 +3384,33 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
     def _sync_mode(self) -> None:
         """Swap quick-preview controls between series and evolution layouts."""
         mode = self._mode_combo.currentData() or "series"
-        self._series_widget.setVisible(mode == "series")
-        self._evo_widget.setVisible(mode in {"evolution", "heatmap", "contour", "contourf", "contourfb"})
-        self.refresh()
+        is_series = mode == "series"
+        self._series_widget.setVisible(is_series)
+        self._evo_widget.setVisible(not is_series)
+        self._run_combo_block.setVisible(is_series)
+        self._run_combo_evo_block.setVisible(not is_series)
+        is_heatmap_mode = mode in {"heatmap", "contour", "contourf", "contourfb"}
+        self._evo_x_block.setVisible(not is_series)
+        self._evo_y_block.setVisible(is_heatmap_mode)
+        self._heatmap_scale_block.setVisible(is_heatmap_mode)
+        self._heatmap_min_block.setVisible(is_heatmap_mode)
+        self._heatmap_max_block.setVisible(is_heatmap_mode)
+        self._play_btn.setVisible(not is_series)
+        self._evo_dirty = True
+        self._animation_playing = False
+        self._play_btn.setText("▶")
+        self._auto_preview()
 
     def _on_matrix_changed(self) -> None:
         self._reset_heatmap_range_from_selection()
-        self._update_run_slider(reset_to_current=False)
-        self.refresh()
+        self._evo_dirty = True
+        self._auto_preview()
+
+    def _on_evo_axis_changed(self) -> None:
+        self._evo_dirty = True
+        self._animation_playing = False
+        self._play_btn.setText("▶")
+        self._auto_preview()
 
     def _reset_heatmap_range_from_selection(self) -> None:
         matrix_var = self._evo_matrix_combo.currentData()
@@ -3521,45 +3434,83 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             return
         fixed_idx = self._heatmap_scale_combo.findData("fixed")
         if fixed_idx >= 0 and self._heatmap_scale_combo.currentData() != "fixed":
+            self._heatmap_scale_combo.blockSignals(True)
             self._heatmap_scale_combo.setCurrentIndex(fixed_idx)
+            self._heatmap_scale_combo.blockSignals(False)
+
+    def _on_series_changed(self) -> None:
+        if (self._mode_combo.currentData() or "series") == "series":
+            self.refresh()
+
+    def _on_run_combo_changed(self) -> None:
+        if (self._mode_combo.currentData() or "series") == "series":
+            self.refresh()
+
+    def _on_run_evo_changed(self) -> None:
+        self._evo_dirty = True
+        self._animation_playing = False
+        self._play_btn.setText("▶")
+        self._render_evo_static()
+
+    def _on_play_clicked(self) -> None:
+        mode = self._mode_combo.currentData() or "series"
+        if mode == "evolution" and not self._evo_dirty and self._plot_view.isVisible():
+            self._toggle_animation()
         else:
             self.refresh()
 
-    def _on_run_changed(self, _val: int) -> None:
-        self._update_run_label()
-        self.refresh()
-
-    def _update_run_slider(self, reset_to_current: bool = False) -> None:
-        matrix_var = self._evo_matrix_combo.currentData()
-        n_runs = 0
-        if matrix_var:
-            n_runs = len(self._saved_matrix_snapshots(matrix_var))
-        previous = self._evo_run_slider.value()
-        self._evo_run_slider.blockSignals(True)
-        # positions: 0..n_runs-1 = saved runs (newest first), n_runs = current
-        self._evo_run_slider.setRange(0, n_runs)
-        next_value = n_runs if reset_to_current else min(previous, n_runs)
-        self._evo_run_slider.setValue(next_value)
-        self._evo_run_slider.blockSignals(False)
-        self._update_run_label()
-
-    def _update_run_label(self) -> None:
-        matrix_var = self._evo_matrix_combo.currentData()
-        if not matrix_var:
-            self._evo_run_label.setText("current")
+    def _toggle_animation(self) -> None:
+        view = self._plot_view._view
+        if not hasattr(view, "page"):
             return
-        history = self._saved_matrix_snapshots(matrix_var)
-        run_idx = self._evo_run_slider.value()
-        if run_idx < len(history):
-            label = history[run_idx][0]
-            self._evo_run_label.setText(f"{label}")
+        if self._animation_playing:
+            js = (
+                "var gd=document.querySelector('.js-plotly-plot');"
+                "if(gd){Plotly.animate(gd,[null],{mode:'immediate',"
+                "frame:{duration:0,redraw:false},transition:{duration:0}});}"
+            )
+            self._animation_playing = False
+            self._play_btn.setText("▶")
         else:
-            self._evo_run_label.setText("current")
+            js = (
+                "var gd=document.querySelector('.js-plotly-plot');"
+                f"if(gd){{Plotly.animate(gd,null,{{mode:'immediate',"
+                f"frame:{{duration:{_EVO_ANIMATION_FRAME_MS},redraw:false}},"
+                f"transition:{{duration:0}},fromcurrent:true}});}}"
+            )
+            self._animation_playing = True
+            self._play_btn.setText("⏸")
+        view.page().runJavaScript(js)
 
-    def _saved_matrix_snapshots(self, matrix_var: str) -> list[tuple[str, dict[str, np.ndarray]]]:
-        from pyside_app import array_store
-        return [
-            (label, arrays)
-            for label, arrays in array_store.get_run_snapshots(matrix_var)
-            if label != self._current_label
-        ]
+    def add_run(self, namespace_snapshot: dict[str, Any], label: str) -> None:
+        """Store a parameter-run snapshot for the history dropdown."""
+        new_1d, new_2d, new_3d = extract_notebook_array_variables_with_3d(namespace_snapshot)
+        if not new_1d and not new_2d and not new_3d:
+            return
+        self._run_history.insert(0, (label, new_1d, new_2d, new_3d))
+        if len(self._run_history) > 8:
+            self._run_history.pop()
+        self._rebuild_run_combo()
+
+    def clear_history(self) -> None:
+        """Remove all history entries from the run dropdown."""
+        self._run_history.clear()
+        self._rebuild_run_combo()
+
+    def _rebuild_run_combo(self) -> None:
+        self._run_combo.blockSignals(True)
+        self._run_combo.clear()
+        self._run_combo.add_check_item("Current", -1, checked=True)
+        for i, (label, _, _, _) in enumerate(self._run_history):
+            short = label[:28] + "…" if len(label) > 28 else label
+            self._run_combo.add_check_item(short, i, checked=False)
+        self._run_combo.blockSignals(False)
+
+        self._run_combo_evo.blockSignals(True)
+        self._run_combo_evo.clear()
+        self._run_combo_evo.addItem("Current", -1)
+        for i, (label, _, _, _) in enumerate(self._run_history):
+            short = label[:28] + "…" if len(label) > 28 else label
+            self._run_combo_evo.addItem(short, i)
+        self._run_combo_evo.blockSignals(False)
+

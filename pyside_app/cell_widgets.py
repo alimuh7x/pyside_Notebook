@@ -1076,10 +1076,6 @@ class NotebookCellWidget(QFrame):
         )
         self.delete_btn.clicked.connect(lambda: self.on_delete and self.on_delete(self))
         toolbar.addWidget(self.delete_btn)
-        self.clear_btn = QPushButton("Clear Output", self)
-        self.clear_btn.setStyleSheet(_cell_btn_ss)
-        self.clear_btn.clicked.connect(self.clear_output)
-        toolbar.addWidget(self.clear_btn)
         outer.addLayout(toolbar)
 
         body = QHBoxLayout()

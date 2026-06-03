@@ -50,8 +50,6 @@ class NotebookToolbar(QWidget):
 
     run_all_requested = Signal()
     restart_requested = Signal()
-    autosave_requested = Signal()
-    save_requested = Signal()
     save_example_requested = Signal()
     open_requested = Signal()
     functions_requested = Signal()
@@ -67,8 +65,6 @@ class NotebookToolbar(QWidget):
         left_buttons = [
             ("run_all_button", "Run All", self.run_all_requested.emit, PRIMARY_BTN),
             ("restart_button", "Restart Kernel", self.restart_requested.emit, SECONDARY_BTN),
-            ("autosave_button", "Autosave", self.autosave_requested.emit, LIGHT_BTN),
-            ("save_button", "Save", self.save_requested.emit, LIGHT_BTN),
             ("save_example_button", "Save Example", self.save_example_requested.emit, LIGHT_BTN),
             ("open_button", "Open", self.open_requested.emit, LIGHT_BTN),
         ]
@@ -680,7 +676,6 @@ class GraphPanelWidget(QWidget):
         super().__init__(parent)
         print("[debug][graph-panel-widget] init:start", flush=True)
         self._namespace: dict[str, Any] = {}
-        self._current_label = "baseline"
         self._panels: list[QuickGraphPreviewPanel] = []
         self._cards: list[QWidget] = []
 
@@ -715,8 +710,6 @@ class GraphPanelWidget(QWidget):
         panel = QuickGraphPreviewPanel(self)
         if self._namespace:
             panel.set_namespace(self._namespace)
-            panel.set_current_label(self._current_label)
-            panel.load_saved_runs_from_store()
 
         # ── card wrapper ──────────────────────────────────────────────────────
         card = QFrame(self)
@@ -750,12 +743,6 @@ class GraphPanelWidget(QWidget):
             " border-radius:6px; background:#3e4451; color:#d7dae0; font-weight:500; }"
             "QPushButton:hover { background:#4a5568; border-color:#61afef; color:#61afef; }"
         )
-
-        clear_btn = QPushButton("Clear history", hdr)
-        clear_btn.setFixedHeight(22)
-        clear_btn.setStyleSheet(_btn_ss)
-        clear_btn.clicked.connect(panel.clear_history)
-        hdr_layout.addWidget(clear_btn)
 
         dl_btn = QPushButton("Download PNG", hdr)
         dl_btn.setFixedHeight(22)
@@ -819,25 +806,17 @@ class GraphPanelWidget(QWidget):
     def set_namespace(self, namespace: dict[str, Any]) -> None:
         print(f"[debug][graph-panel-widget] set_namespace count={len(namespace)}", flush=True)
         self._namespace = namespace
-        self._current_label = "baseline"
         for panel in self._panels:
             panel.set_namespace(namespace)
 
-    def set_current_label(self, label: str) -> None:
-        """Override the label applied to the current namespace snapshot in all panels."""
-        self._current_label = label or "baseline"
-        for panel in self._panels:
-            panel.set_current_label(self._current_label)
-
     def add_run(self, namespace_snapshot: dict[str, Any], label: str) -> None:
-        """Record a slider run in all panels for history trace overlay."""
+        """Record a parameter-run snapshot in all panels' history dropdowns."""
         self._namespace = dict(namespace_snapshot)
-        self._current_label = label or "current"
         for panel in self._panels:
             panel.add_run(namespace_snapshot, label)
 
     def clear_history(self) -> None:
-        """Clear run history from all panels. Called on kernel restart."""
+        """Clear run history from all panels."""
         for panel in self._panels:
             panel.clear_history()
 

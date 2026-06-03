@@ -299,14 +299,6 @@ class NotebookTab(QWidget):
         return self.toolbar_widget.button("restart_button")
 
     @property
-    def autosave_button(self):
-        return self.toolbar_widget.button("autosave_button")
-
-    @property
-    def save_button(self):
-        return self.toolbar_widget.button("save_button")
-
-    @property
     def save_example_button(self):
         return self.toolbar_widget.button("save_example_button")
 
@@ -324,10 +316,6 @@ class NotebookTab(QWidget):
 
     def _autosave_timeout(self) -> None:
         print("[debug][notebook-tab] autosave_timeout", flush=True)
-        self.autosave_now(self.autosave_path)
-
-    def _handle_toolbar_autosave(self) -> None:
-        print("[debug][notebook-tab] handle_toolbar_autosave", flush=True)
         self.autosave_now(self.autosave_path)
 
     def _build_execution_controller(self) -> ExecutionController:
@@ -607,8 +595,6 @@ class NotebookTab(QWidget):
         toolbar = NotebookToolbar(status_style=_NB_STATUS_READY_SS, parent=self)
         toolbar.run_all_requested.      connect(self.run_all_cells)
         toolbar.restart_requested.      connect(self.restart_kernel)
-        toolbar.autosave_requested.     connect(self._handle_toolbar_autosave)
-        toolbar.save_requested.         connect(self.save_document)
         toolbar.save_example_requested. connect(self.save_example_document)
         toolbar.open_requested.         connect(self.open_document)
         toolbar.functions_requested.    connect(self.toggle_functions_panel)
@@ -707,8 +693,6 @@ class NotebookTab(QWidget):
                 if result.namespace_snapshot and not result.error:
                     tab._refresh_variables_panel()
                     label = parameter_change_label(_captured_overrides, _captured_prev)
-                    from pyside_app import array_store
-                    array_store.store_run(result.namespace_snapshot, label)
                     graph_panel.add_run(result.namespace_snapshot, label)
                     _ensure_panel(_captured_source)
 

@@ -115,9 +115,8 @@ class CheckableComboBox(QComboBox):
         self.lineEdit().installEventFilter(self)
         self.view().setMouseTracking(True)
         self.view().viewport().setMouseTracking(True)
+        self.view().viewport().installEventFilter(self)
         self.view().setStyleSheet(_COMBO_POPUP_STYLE)
-        # pressed fires before Qt's internal hidePopup — set flag here
-        self.view().pressed.connect(self._on_item_pressed)
         self.view().clicked.connect(self._toggle_clicked_item)
         self._update_display_text()
 
@@ -129,12 +128,15 @@ class CheckableComboBox(QComboBox):
         super().hidePopup()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        """Toggle popup when the read-only summary field is clicked."""
+        """Keep popup open when clicking items; toggle popup on the summary field."""
+        if watched is self.view().viewport() and event.type() == QEvent.Type.MouseButtonPress:
+            self._suppress_hide = True
+            return False
         if watched is self.lineEdit() and event.type() == QEvent.Type.MouseButtonPress:
             if self.view().isVisible():
-                super().hidePopup()  # already open — close normally
+                super().hidePopup()
             else:
-                self._suppress_hide = True  # absorb the release-triggered hidePopup
+                self._suppress_hide = True
                 self.showPopup()
             return True
         return super().eventFilter(watched, event)
@@ -152,6 +154,15 @@ class CheckableComboBox(QComboBox):
         if checked and not self.signalsBlocked():
             print("[debug][checkable-combo] add_item:emit_checked_changed", flush=True)
             self.checkedItemsChanged.emit()
+
+    def checked_data(self) -> list:
+        """Return user-data of all checked items (any type)."""
+        result = []
+        for index in range(self.count()):
+            item = self.model().item(index, 0)
+            if item and item.checkState() == Qt.CheckState.Checked:
+                result.append(item.data(Qt.ItemDataRole.UserRole))
+        return result
 
     def checked_values(self) -> list[str]:
         """Return the user-data values for all currently checked items."""
@@ -185,10 +196,6 @@ class CheckableComboBox(QComboBox):
         print("[debug][checkable-combo] clear", flush=True)
         super().clear()
         self._update_display_text()
-
-    def _on_item_pressed(self, index: QModelIndex) -> None:
-        """Set suppress flag the moment the user presses on any item."""
-        self._suppress_hide = True
 
     def _toggle_clicked_item(self, index: QModelIndex) -> None:
         """Flip one item's check state without closing the popup."""
