@@ -843,7 +843,7 @@ class NotebookTab(QWidget):
 
     def save_example_document(self) -> None:
         """Save the current notebook as a reusable example entry."""
-        self.document_controller.save_example_document(suggest_example_filename)
+        self.document_controller.save_example_document()
 
     def open_document(self) -> None:
         """Open a notebook JSON file and load it into the current tab."""

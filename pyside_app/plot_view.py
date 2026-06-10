@@ -171,16 +171,30 @@ class PlotView(QWidget):
             "})();"
         )
         self._view.page().runJavaScript(js)
-        QTimer.singleShot(1500, self._read_png_data)
+        self._png_poll_attempts = 0
+        QTimer.singleShot(300, self._read_png_data)
 
     def _read_png_data(self) -> None:
-        """Read the PNG data URL stored by JS and trigger save."""
-        self._view.page().runJavaScript("window.__png_data__ || ''", self._handle_png_data)
+        """Poll until Plotly.toImage resolves, then handle the result."""
+        self._view.page().runJavaScript(
+            "window.__png_data__ || ''",
+            self._handle_png_data,
+        )
+
+    def _retry_png_poll(self) -> None:
+        self._png_poll_attempts = getattr(self, "_png_poll_attempts", 0) + 1
+        if self._png_poll_attempts < 20:
+            QTimer.singleShot(250, self._read_png_data)
+        else:
+            self._save_pixmap_png()
 
     def _handle_png_data(self, data_url: object) -> None:
         """Decode the base64 PNG data URL and open a save dialog."""
         url = str(data_url) if data_url else ""
         print(f"[debug][plot-view] handle_png_data status={'ok' if url.startswith('data:') else url[:30]!r}", flush=True)
+        if not url:
+            self._retry_png_poll()
+            return
         if not url.startswith("data:image/png;base64,"):
             self._save_pixmap_png()
             return

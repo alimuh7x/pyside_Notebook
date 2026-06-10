@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QMessageBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -3065,6 +3066,19 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             "QPushButton:pressed { background:#7aab5a; }"
         )
         controls_row.addWidget(self._play_btn, 0)
+
+        self._mp4_btn = QPushButton("⬇ MP4", card)
+        self._mp4_btn.setFixedHeight(36)
+        self._mp4_btn.setToolTip("Export animation as MP4")
+        self._mp4_btn.setStyleSheet(
+            "QPushButton { background:#61afef; color:#282c34; border:none;"
+            " border-radius:6px; font-size:12px; font-weight:700; padding:0 8px; }"
+            "QPushButton:hover { background:#78bff7; }"
+            "QPushButton:pressed { background:#4a9bdd; }"
+        )
+        self._mp4_btn.hide()
+        controls_row.addWidget(self._mp4_btn, 0)
+
         cl.addLayout(controls_row)
         root.addWidget(card)
 
@@ -3095,6 +3109,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._run_combo.checkedItemsChanged.connect(self._on_run_combo_changed)
         self._run_combo_evo.currentIndexChanged.connect(self._on_run_evo_changed)
         self._play_btn.clicked.connect(self._on_play_clicked)
+        self._mp4_btn.clicked.connect(self._on_export_mp4)
 
     # ── public API ───────────────────────────────────────────────────
 
@@ -3307,6 +3322,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             self._evo_dirty = False
             self._animation_playing = True
             self._play_btn.setText("⏸")
+            self._mp4_btn.setVisible(bool(self._figure.frames))
 
     # ── private ──────────────────────────────────────────────────────
 
@@ -3396,6 +3412,7 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
         self._heatmap_min_block.setVisible(is_heatmap_mode)
         self._heatmap_max_block.setVisible(is_heatmap_mode)
         self._play_btn.setVisible(not is_series)
+        self._mp4_btn.hide()
         self._evo_dirty = True
         self._animation_playing = False
         self._play_btn.setText("▶")
@@ -3481,6 +3498,90 @@ class QuickGraphPreviewPanel(BaseGraphPanel):
             self._animation_playing = True
             self._play_btn.setText("⏸")
         view.page().runJavaScript(js)
+
+    def _on_export_mp4(self) -> None:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.animation as manim
+
+        fig_data = self._figure
+        frames = fig_data.frames
+        def _msg(icon, title, text):
+            mb = QMessageBox(icon, title, text, QMessageBox.StandardButton.Ok, self)
+            mb.setStyleSheet(
+                "QMessageBox { background:#ffffff; color:#1a1a1a; }"
+                "QLabel { color:#1a1a1a; font-size:13px; }"
+                "QPushButton { background:#e0e0e0; color:#1a1a1a; border-radius:4px;"
+                " padding:4px 16px; font-size:13px; }"
+                "QPushButton:hover { background:#c8c8c8; }"
+            )
+            mb.exec()
+
+        if not frames:
+            _msg(QMessageBox.Icon.Warning, "No animation", "Play the animation first, then export.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save animation as MP4", "animation.mp4", "MP4 video (*.mp4)"
+        )
+        if not path:
+            return
+
+        # extract x/y arrays from each plotly frame
+        xs, ys, labels = [], [], []
+        for frame in frames:
+            trace = frame.data[0]
+            xs.append(np.asarray(trace.x, dtype=float))
+            ys.append(np.asarray(trace.y, dtype=float))
+            labels.append(str(frame.name))
+
+        all_y = np.concatenate(ys)
+        finite = all_y[np.isfinite(all_y)]
+        y_min = float(np.min(finite)) if finite.size else 0.0
+        y_max = float(np.max(finite)) if finite.size else 1.0
+        pad = (y_max - y_min) * 0.08 if y_max > y_min else max(1.0, abs(y_max) * 0.08)
+
+        layout = fig_data.layout
+        title_text = (layout.title.text or "") if layout.title else ""
+        x_title = (layout.xaxis.title.text or "") if layout.xaxis and layout.xaxis.title else ""
+        y_title = (layout.yaxis.title.text or "") if layout.yaxis and layout.yaxis.title else ""
+
+        mpl_fig, ax = plt.subplots(figsize=(8, 5))
+        (line,) = ax.plot(xs[0], ys[0], color="#2563eb", linewidth=2)
+        ax.set_xlim(float(xs[0].min()), float(xs[0].max()))
+        ax.set_ylim(y_min - pad, y_max + pad)
+        ax.set_facecolor("white")
+        mpl_fig.patch.set_facecolor("white")
+        ax.tick_params(colors="black")
+        for spine in ax.spines.values():
+            spine.set_edgecolor("#cccccc")
+        if title_text:
+            ax.set_title(title_text, color="black", fontsize=13)
+        if x_title:
+            ax.set_xlabel(x_title, color="black")
+        if y_title:
+            ax.set_ylabel(y_title, color="black")
+        time_label = ax.text(0.02, 0.96, labels[0], transform=ax.transAxes,
+                             color="#555555", fontsize=11, va="top")
+
+        fps = max(1, round(1000 / max(_EVO_ANIMATION_FRAME_MS, 1)))
+
+        def _update(i: int):
+            line.set_data(xs[i], ys[i])
+            time_label.set_text(labels[i])
+            return line, time_label
+
+        ani = manim.FuncAnimation(mpl_fig, _update, frames=len(frames), blit=True)
+        writer = manim.FFMpegWriter(fps=fps, bitrate=1800)
+        try:
+            ani.save(path, writer=writer, dpi=120)
+            _msg(QMessageBox.Icon.Information, "Saved", f"MP4 saved to:\n{path}")
+        except Exception as exc:
+            _msg(QMessageBox.Icon.Critical, "Export failed",
+                 f"Could not write MP4:\n{exc}\n\nMake sure ffmpeg is installed.")
+        finally:
+            plt.close(mpl_fig)
 
     def add_run(self, namespace_snapshot: dict[str, Any], label: str) -> None:
         """Store a parameter-run snapshot for the history dropdown."""
