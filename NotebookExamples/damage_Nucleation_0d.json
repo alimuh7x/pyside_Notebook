@@ -1,0 +1,35 @@
+{
+  "version": 6,
+  "layout": {
+    "left_column_width_pct": 49
+  },
+  "cells": [
+    {
+      "id": "cell-1bf9eaf2",
+      "type": "code",
+      "column": "left",
+      "panel_width": null,
+      "source": "import numpy as np\n\n# ============================================================\n# Material parameters\n# ============================================================\n\nE0 = 210e9\nk_res = 1e-6\n\neps_c = 0.0010\neps_f = 0.0050\n\nd_crit = 0.50\nd_max = 1.0 - d_crit\n\np = 2\n\n# ============================================================\n# Pre-damage\n# ============================================================\n\nd_pre = 0.20   # try 0.0, 0.1, 0.2, 0.3\n\n# ============================================================\n# Loading\n# ============================================================\n\nnSteps = 100\nstrain = np.linspace(0.0, 0.008, nSteps)\n\n# ============================================================\n# Variables\n# ============================================================\n\ndamage = np.zeros(nSteps)\nstress = np.zeros(nSteps)\nE = np.zeros(nSteps)\n\n# ============================================================\n# Loading loop\n# ============================================================\n\nfor i in range(nSteps):\n\n    eps = strain[i]\n\n    # strain measure\n    x = (eps - eps_c) / (eps_f - eps_c)\n    x = np.clip(x, 0.0, 1.0)\n\n    # additive damage\n    d_strain = d_max * x**p\n    d = d_pre + d_strain\n    d = np.clip(d, 0.0, 1.0)\n\n    # nucleation\n    if d >= d_crit:\n        d = 1.0\n\n    # degraded stiffness\n    E_local = E0 * ((1.0 - d) + k_res)\n\n    # stress\n    sigma = E_local * eps\n\n    damage[i] = d\n    stress[i] = sigma\n    E[i] = E_local\n\n    if d == 1.0:\n        print(f\"Nucleation at step {i}\")\n        print(f\"Strain = {eps:.6f}\")\n        print(f\"Pre-damage = {d_pre}\")\n        print(f\"Damage = {d}\")\n        print(f\"Stress = {sigma/1e6:.1f} MPa\")\n        break\n\nprint(\"Final damage =\", d)\nprint(\"Final stress =\", stress[i] / 1e6, \"MPa\")"
+    }
+  ],
+  "metadata": {
+    "version": 6,
+    "title": "damage Nucleation 0d",
+    "category": "custom",
+    "description": "Saved from the desktop notebook.",
+    "tags": [
+      "saved",
+      "desktop"
+    ]
+  },
+  "runtime_outputs": {
+    "cell-1bf9eaf2": [
+      {
+        "kind": "stdout",
+        "data": {
+          "text": "[debug][execution-engine] safe_import:start name='numpy' fromlist=() level=0\n[debug][execution-engine] safe_import:done name='numpy'\nNucleation at step 51\nStrain = 0.004121\nPre-damage = 0.2\nDamage = 1.0\nStress = 0.0 MPa\nFinal damage = 1.0\nFinal stress = 0.0008654545454545453 MPa"
+        }
+      }
+    ]
+  }
+}

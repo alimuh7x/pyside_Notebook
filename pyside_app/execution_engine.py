@@ -61,6 +61,7 @@ SAFE_BUILTIN_NAMES = (
     "locals",
     "map",
     "max",
+    "min",
     "next",
     "object",
     "oct",
@@ -524,6 +525,8 @@ def _looks_like_log_parameter(name: str, val: float | int) -> bool:
     if float(val) <= 0:
         return False
     lowered = name.lower()
+    if lowered == "d":
+        return True
     if any(part in lowered for part in _LOG_PARAMETER_PARTS):
         return True
     return abs(float(val)) >= 1e4 or abs(float(val)) < 1e-2
@@ -671,8 +674,6 @@ def detect_cell_parameters(source: str) -> dict[str, dict[str, Any]]:
 
 def build_base_namespace() -> dict[str, Any]:
     """Create the default execution namespace shared by notebook cells."""
-    callable_min = UNIT_CONSTANTS["min"]
-
     try:
         from plotly.subplots import make_subplots as _make_subplots
     except Exception:
@@ -720,7 +721,6 @@ def build_base_namespace() -> dict[str, Any]:
         **PHYSICAL_CONSTANTS,
         **UNIT_CONSTANTS,
         **ALLOWED_NOTEBOOK_FUNCTIONS,
-        "min": callable_min,
         **extra,
     }
     return namespace

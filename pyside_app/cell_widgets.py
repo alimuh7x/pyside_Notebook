@@ -6,8 +6,8 @@ import uuid
 from typing import Any, Callable
 
 import markdown
-from PySide6.QtCore import QStringListModel, QTimer, Qt
-from PySide6.QtGui import QColor, QFont, QKeySequence, QShortcut, QSyntaxHighlighter, QTextCharFormat, QTextCursor
+from PySide6.QtCore import QRect, QSize, QStringListModel, QTimer, Qt
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QShortcut, QSyntaxHighlighter, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QCompleter,
@@ -33,6 +33,20 @@ from pyside_app.markdown_preview import MarkdownPreview
 from pyside_app.plot_view import PlotView
 
 
+class LineNumberArea(QWidget):
+    """Gutter that paints line numbers beside a QPlainTextEdit."""
+
+    def __init__(self, editor: AutoResizePlainTextEdit) -> None:
+        super().__init__(editor)
+        self._editor = editor
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._editor._gutter_width(), 0)
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        self._editor._paint_line_numbers(event)
+
+
 class AutoResizePlainTextEdit(QPlainTextEdit):
     """Plain-text editor that grows vertically to fit its document."""
 
@@ -42,14 +56,64 @@ class AutoResizePlainTextEdit(QPlainTextEdit):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        self._line_number_area = LineNumberArea(self)
+        self.blockCountChanged.connect(self._update_gutter_width)
+        self.updateRequest.connect(self._scroll_gutter)
         self.document().documentLayout().documentSizeChanged.connect(self._update_height)
         self.textChanged.connect(self._update_height)
+        self._update_gutter_width()
         self._update_height()
 
     def setPlainText(self, text: str) -> None:
         """Set editor contents and immediately recompute widget height."""
         super().setPlainText(text)
         self._update_height()
+
+    # ── line number gutter ────────────────────────────────────────────
+
+    def _gutter_width(self) -> int:
+        digits = max(2, len(str(self.blockCount())))
+        return 8 + self.fontMetrics().horizontalAdvance("9") * digits
+
+    def _update_gutter_width(self, _count: int = 0) -> None:
+        self.setViewportMargins(self._gutter_width(), 0, 0, 0)
+
+    def _scroll_gutter(self, rect: QRect, dy: int) -> None:
+        if dy:
+            self._line_number_area.scroll(0, dy)
+        else:
+            self._line_number_area.update(0, rect.y(), self._line_number_area.width(), rect.height())
+        if rect.contains(self.viewport().rect()):
+            self._update_gutter_width()
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        cr = self.contentsRect()
+        self._line_number_area.setGeometry(QRect(cr.left(), cr.top(), self._gutter_width(), cr.height()))
+
+    def _paint_line_numbers(self, event) -> None:
+        painter = QPainter(self._line_number_area)
+        painter.fillRect(event.rect(), QColor("#21252b"))
+        painter.setFont(self.font())
+        block = self.firstVisibleBlock()
+        block_number = block.blockNumber()
+        offset = self.contentOffset()
+        top = round(self.blockBoundingGeometry(block).translated(offset).top())
+        bottom = top + round(self.blockBoundingRect(block).height())
+        line_h = self.fontMetrics().height()
+        while block.isValid() and top <= event.rect().bottom():
+            if block.isVisible() and bottom >= event.rect().top():
+                painter.setPen(QColor("#4b5263"))
+                painter.drawText(
+                    0, top, self._line_number_area.width() - 4, line_h,
+                    Qt.AlignmentFlag.AlignRight, str(block_number + 1),
+                )
+            block = block.next()
+            top = bottom
+            bottom = top + round(self.blockBoundingRect(block).height())
+            block_number += 1
+
+    # ── height ────────────────────────────────────────────────────────
 
     def _update_height(self, *_args: object) -> None:
         """Resize the editor to match its current number of text lines."""

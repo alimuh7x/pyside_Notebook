@@ -439,7 +439,7 @@ PHYSICAL_CONSTANTS: dict[str, float] = {
 UNIT_CONSTANTS: dict[str, float] = {
     "nm": 1e-9, "um": 1e-6, "us": 1e-6, "mm": 1e-3, "cm": 1e-2, "m": 1.0, "km": 1e3,
     "Pa": 1.0, "kPa": 1e3, "MPa": 1e6, "GPa": 1e9,
-    "sec": 1.0, "ms": 1e-3, "min": 60.0, "h": 3600.0,
+    "sec": 1.0, "ms": 1e-3, "minute": 60.0, "min_unit": 60.0, "h": 3600.0,
     "hour": 3600.0, "day": 86400.0, "week": 604800.0, "month": 2_592_000.0,
     "kg": 1.0, "N": 1.0, "kN": 1e3, "MN": 1e6,
     "J": 1.0, "kJ": 1e3, "MJ": 1e6,

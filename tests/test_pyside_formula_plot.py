@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 
 import pytest
-from PySide6.QtWidgets import QApplication, QScrollArea
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QScrollArea, QVBoxLayout
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -224,6 +225,54 @@ def test_display_mode_combo_switches_2d_trace_type():
     assert tab.state.display_mode_2d == "contour"
     figure = build_formula_figure_2d(tab.state)
     assert figure.data[0].type == "contour"
+
+
+def test_1d_formula_edit_updates_default_label_before_plotting():
+    _app()
+    tab = FormulaPlotTab()
+    tab.expression_edit.setText("x**2")
+    tab.expression_edit.editingFinished.emit()
+    tab.plot_1d_btn.click()
+
+    tab.expression_edit.setText("x**3")
+    tab.expression_edit.editingFinished.emit()
+    tab.plot_1d_btn.click()
+
+    assert tab.state.formulas[0]["expression"] == "x**3"
+    assert tab.state.formulas[0]["label"] == "x**3"
+    assert "Formula: x**3" in tab.state.last_summary_text
+
+
+def test_2d_formula_edit_updates_default_label_before_plotting():
+    _app()
+    tab = FormulaPlotTab()
+    tab.plot_2d_btn.click()
+
+    tab.expression_2d_edit.setText("x + y")
+    tab.plot_2d_btn.click()
+
+    assert tab.state.expression_2d == "x + y"
+    assert tab.state.label_2d == "x + y"
+    assert "Formula: x + y" in tab.state.last_summary_text
+
+
+def test_add_formula_places_formula_editors_on_separate_lines():
+    _app()
+    tab = FormulaPlotTab()
+
+    tab.add_formula_btn.click()
+
+    assert isinstance(tab.formula_rows_layout, QVBoxLayout)
+    assert tab.formula_rows_layout.count() == 2
+
+
+def test_formula_plot_analysis_tables_do_not_have_nested_scrollbars():
+    _app()
+    tab = FormulaPlotTab()
+
+    for browser in (tab.summary_browser, tab.details_browser):
+        assert browser.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        assert browser.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
 
 
 def test_build_formula_figure_supports_multiple_formulas_and_analysis_markers():

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSlider,
     QSpinBox,
     QTextBrowser,
@@ -632,6 +633,21 @@ def _analysis_table_html(title: str, text: str) -> str:
     return html
 
 
+def _configure_expanding_text_browser(browser: QTextBrowser) -> None:
+    browser.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    browser.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+
+def _set_expanding_browser_html(browser: QTextBrowser, html: str) -> None:
+    browser.setHtml(html)
+    width = max(browser.viewport().width(), browser.width(), 320)
+    browser.document().setTextWidth(max(1, width - 2 * browser.frameWidth()))
+    height = int(browser.document().size().height()) + 2 * browser.frameWidth() + 16
+    browser.setMinimumHeight(max(120, height))
+    print(f"[debug][formula-plot] expanding_browser_html height={browser.minimumHeight()} width={width}", flush=True)
+
+
 def _intervals_from_sign(x_values: np.ndarray, signal: np.ndarray, positive_label: str, negative_label: str) -> dict[str, list[tuple[float, float]]]:
     finite_mask = np.isfinite(signal)
     intervals = {positive_label: [], negative_label: [], "flat": []}
@@ -692,6 +708,12 @@ def _apply_formula_preset_defaults(state: FormulaPlotState, expression: str) -> 
     for key, value in PRESET_PANEL_DEFAULTS.get((expression or "").strip(), {}).items():
         setattr(state, key, value)
     print(f"[debug][formula-plot] apply_formula_preset_defaults params={state.params!r}", flush=True)
+
+
+def _label_should_follow_expression(label: str, previous_expression: str) -> bool:
+    clean_label = (label or "").strip()
+    clean_expression = (previous_expression or "").strip()
+    return not clean_label or clean_label == clean_expression
 
 
 def apply_2d_preset(state: FormulaPlotState, preset_name: str) -> None:
@@ -1280,6 +1302,8 @@ class FormulaPlotTab(QWidget):
         summary_row = QHBoxLayout()
         self.summary_browser = QTextBrowser(self.graph_column_widget)
         self.details_browser = QTextBrowser(self.graph_column_widget)
+        _configure_expanding_text_browser(self.summary_browser)
+        _configure_expanding_text_browser(self.details_browser)
         self.summary_browser.setMinimumHeight(120)
         self.details_browser.setMinimumHeight(120)
         summary_row.addWidget(self.summary_browser)
@@ -1360,7 +1384,7 @@ class FormulaPlotTab(QWidget):
         self.example_combo.setMinimumWidth(190)
         self.one_d_row_layout.addWidget(self.example_combo, 1)
         self.formula_rows_container = QWidget(self.one_d_panel)
-        self.formula_rows_layout = QHBoxLayout(self.formula_rows_container)
+        self.formula_rows_layout = QVBoxLayout(self.formula_rows_container)
         self.formula_rows_layout.setContentsMargins(0, 0, 0, 0)
         self.formula_rows_layout.setSpacing(10)
         self.one_d_row_layout.addWidget(self.formula_rows_container, 6)
@@ -1620,7 +1644,7 @@ class FormulaPlotTab(QWidget):
             grid.setColumnStretch(2, 1)
             grid.setColumnStretch(3, 1)
             self.formula_rows_layout.addWidget(row_widget)
-        print("[debug][formula-plot-tab] sync_formula_rows single_line_rows=True", flush=True)
+        print("[debug][formula-plot-tab] sync_formula_rows stacked_rows=True", flush=True)
         self._sync_analysis_formula_combo()
 
     def _sync_analysis_formula_combo(self) -> None:
@@ -1713,8 +1737,8 @@ class FormulaPlotTab(QWidget):
                 self.plot_view.set_figure(figure)
                 self.slice_row.hide()
                 self._set_status("Updated 1D plot", FORMULA_STATUS_UPDATED_STYLE)
-            self.summary_browser.setHtml(_analysis_table_html("Summary", self.state.last_summary_text))
-            self.details_browser.setHtml(_analysis_table_html("Details", self.state.last_details_text))
+            _set_expanding_browser_html(self.summary_browser, _analysis_table_html("Summary", self.state.last_summary_text))
+            _set_expanding_browser_html(self.details_browser, _analysis_table_html("Details", self.state.last_details_text))
         except Exception as exc:
             print(f"[debug][formula-plot-tab] render_current_plot error={exc!r}", flush=True)
             prefix = "2D" if self.state.panel_type == "2d" else "1D"
@@ -1768,12 +1792,20 @@ class FormulaPlotTab(QWidget):
         if self._suspend_updates:
             return
         print(f"[debug][formula-plot-tab] update_formula_row row_id={row_id!r} expression={expression!r} label={label!r} visible={visible}", flush=True)
+        should_resync_rows = False
         for formula in self.state.formulas:
             if formula.get("id") == row_id:
+                previous_expression = str(formula.get("expression") or "")
+                row_label = expression if _label_should_follow_expression(label, previous_expression) else label
                 formula.update({"expression": expression, "label": label or expression, "color": color, "dash": dash, "width": float(width), "visible": visible})
+                formula["label"] = row_label
+                should_resync_rows = row_label != label
                 break
         _sync_panel_params(self.state)
-        self._sync_analysis_formula_combo()
+        if should_resync_rows:
+            self._sync_formula_rows()
+        else:
+            self._sync_analysis_formula_combo()
         self.refresh_param_controls("1d")
         self._render_current_plot()
 
@@ -1834,8 +1866,15 @@ class FormulaPlotTab(QWidget):
         if self._suspend_updates:
             return
         print("[debug][formula-plot-tab] on_2d_settings_changed", flush=True)
-        self.state.expression_2d = self.expression_2d_edit.text().strip() or "sin(x)*cos(y)"
-        self.state.label_2d = self.label_2d_edit.text().strip() or self.state.expression_2d
+        previous_expression = self.state.expression_2d
+        expression = self.expression_2d_edit.text().strip() or "sin(x)*cos(y)"
+        label_text = self.label_2d_edit.text().strip()
+        self.state.expression_2d = expression
+        self.state.label_2d = expression if _label_should_follow_expression(label_text, previous_expression) else label_text
+        if self.state.label_2d != label_text:
+            self.label_2d_edit.blockSignals(True)
+            self.label_2d_edit.setText(self.state.label_2d)
+            self.label_2d_edit.blockSignals(False)
         self.state.x_min = _as_float(self.x_min_edit.text(), self.state.x_min)
         self.state.x_max = _as_float(self.x_max_edit.text(), self.state.x_max)
         self.state.y_min = _as_float(self.y_min_edit.text(), self.state.y_min)
@@ -1984,9 +2023,11 @@ class FormulaPlotTab(QWidget):
         print("[debug][formula-plot-tab] refresh_1d:start", flush=True)
         self.state.panel_type = "1d"
         if hasattr(self, "expression_edit") and self.state.formulas:
+            previous_expression = str(self.state.formulas[0].get("expression") or "")
             expression = self.expression_edit.text().strip() or "sin(x)"
+            label = str(self.state.formulas[0].get("label") or "")
             self.state.formulas[0]["expression"] = expression
-            if not self.state.formulas[0].get("label") or self.state.formulas[0].get("label") == "sin(x)":
+            if _label_should_follow_expression(label, previous_expression):
                 self.state.formulas[0]["label"] = expression
         self.mode_combo.blockSignals(True)
         self.mode_combo.setCurrentIndex(0)
